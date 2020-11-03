@@ -1,6 +1,6 @@
-#Alpha Zero
+#   Alpha Zero
 
-###動作環境
+### 動作環境
 
 windows10
 <br>
@@ -14,7 +14,7 @@ tqdm 4.48.2
 <br>
 numpy 1.19.1
 
-##モデルを学習させる
+## モデルを学習させる
 
 お好みのディレクトリにクローンします
 ```
@@ -30,14 +30,14 @@ python train.py
 ```
 python train.py modelGen
 ```
-##モデルと対戦する
+## モデルと対戦する
 
 学習し終えたmodelと対戦するには play.py を実行します。
 modelGenには対戦したい、modelの世代の数字を入れます。
 ```
 python play.py modelGen
 ```
-##config.pyについて
+## config.pyについて
 
 このファイルはモデルや探索の深さ、などのハイパーパラメータを操作することができます。
 <br>
