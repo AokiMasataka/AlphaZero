@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 import sys
 
 from model import ResNet
@@ -11,6 +12,8 @@ conf.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class Main:
     def __init__(self, loadModelGen=None):
+        os.makedirs('model/' + conf.PATH, exist_ok=True)
+        os.makedirs('data/' + conf.PATH, exist_ok=True)
         self.Model = ResNet().to(conf.DEVICE)
         if loadModelGen == None:
             self.modelGen = 0
