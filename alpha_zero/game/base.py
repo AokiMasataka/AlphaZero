@@ -25,6 +25,14 @@ class GameBase(metaclass=ABCMeta):
     def action(self, action):
         pass
 
+    @abstractmethod
+    def pass_action(self):
+        pass
+
+    @abstractmethod
+    def max_action(self):
+        pass
+
     def get_hash(self):
         return self.state.tobytes()
 
