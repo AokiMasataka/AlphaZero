@@ -26,6 +26,16 @@ class PlayHistory:
         self.winner_list += other.winner_list
         return self
 
+    def __getitem__(self, index, return_dict=False):
+        if return_dict:
+            return {
+                'state': self.state_list[index],
+                'action': self.action_list[index],
+                'winnner': self.winner_list[index]
+            }
+        else:
+            return self.state_list[index], self.action_list[index], self.winner_list[index]
+
     def append(self, state_list=None, action_list=None, winner_list=None, history=None):
         if history is not None:
             assert isinstance(history, PlayHistory), 'history class'
