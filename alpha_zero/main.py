@@ -18,9 +18,6 @@ def main():
     model = Model()
     game = Reversi(size=8)
 
-    # play_history = self_play(game=Reversi, model=model, init_dict=dict(size=8), random_play=16)
-    # game.play_history_replay(play_history=play_history)
-
     play_history = parallel_self_play(
         model=model,
         num_searchs=32,
