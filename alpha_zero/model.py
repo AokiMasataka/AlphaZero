@@ -1,7 +1,11 @@
 import os
 import json
+import numpy
 import torch
 from torch import nn
+
+
+__all__ = ['build_model']
 
 
 class ModelConfig:
@@ -31,9 +35,12 @@ class ModelConfig:
 class Block(nn.Module):
     def __init__(self, dim, eps, momentum, act_fn='relu'):
         super(Block, self).__init__()
-        assert act_fn in ('relu', 'gelu')
         if act_fn == 'relu':
             act_fn = nn.ReLU
+        elif act_fn == 'gelu':
+            act_fn = nn.GELU
+        else:
+            raise 'act_fn is relu or gelu'
         self.conv1 = nn.Conv2d(dim, dim, kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=dim, eps=eps, momentum=momentum)
         self.act1 = act_fn()
@@ -42,10 +49,10 @@ class Block(nn.Module):
         self.act2 = act_fn()
 
     def forward(self, x):
-        cat = x
+        skip = x
         x = self.act1(self.bn1(self.conv1(x)))
-        x = self.act2(self.bn2(self.conv2(x)))
-        return x + cat
+        x = self.bn2(self.conv2(x))
+        return self.act2(x + skip)
 
 
 class ScaleModel(nn.Module):
@@ -72,31 +79,33 @@ class ScaleModel(nn.Module):
             nn.Softmax(dim=1)
         )
 
+    def extract_feature(self, x):
+        x = self.stem(x)
+        return self.blocks(x)
+
     def forward(self, x):
         feature = self.extract_feature(x)
         value = self.value_head(feature)
         policy = self.policy_head(feature)
         return value, policy
 
-    def get_value(self, x):
-        feature = self.extract_feature(x)
-        return self.value_head(feature)
+    @torch.inference_mode()
+    def get_value(self, state):
+        state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+        feature = self.extract_feature(state)
+        return self.value_head(feature).cpu().item()
 
     def get_policy(self, x):
         feature = self.extract_feature(x)
         return self.policy_head(feature)
 
-    def extract_feature(self, x):
-        x = self.stem(x)
-        return self.blocks(x)
-
-    @torch.inference_mode
-    def inference_state(self, state):
-        x = torch.tensor(state, dtype=torch.float).unsqueeze(0)
-        feature = self.extract_feature(x)
+    @torch.inference_mode()
+    def inference_state(self, state: numpy.ndarray):
+        state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+        feature = self.extract_feature(state)
         value = self.value_head(feature)
         policy = self.policy_head(feature)
-        return value, policy
+        return value.cpu().item(), policy.cpu().squeeze(0).numpy()
 
     def save_pretrained(self, save_dir):
         os.makedirs(save_dir, exist_ok=True)
@@ -109,3 +118,36 @@ class ScaleModel(nn.Module):
         model = ScaleModel(config)
         model.laod_state_dict(torch.load(laod_dir + 'model.pth'))
         return model
+
+
+def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1):
+    model_config = ModelConfig(
+        in_channels=in_channels,
+        dim=dim,
+        depth=depth,
+        max_actions=max_actions,
+        eps=eps,
+        momentum=momentum
+    )
+
+    model = ScaleModel(config=model_config)
+    return model
+
+
+if __name__ == '__main__':
+    import numpy as np
+    _config = ModelConfig(dim=64, depth=2, max_actions=8)
+    _model = ScaleModel(config=_config).eval()
+    print(_model)
+
+    _state = np.zeros((2, 8, 8), dtype=np.uint8)
+
+    with torch.no_grad():
+        v, p = _model.inference_state(state=_state)
+
+    print(v)
+    print(type(v))
+
+    print(p)
+    print(p.shape)
+
