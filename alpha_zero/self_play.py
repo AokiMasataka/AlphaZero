@@ -1,22 +1,27 @@
+import ray
 from copy import deepcopy
 import math
 import numpy as np
 
+from data import PlayHistory
 
-def softmax_with_temp(x, temp=1.0):
-    x = np.exp(x * temp)
-    return x / np.sum(x)
+
+def softmax_with_temp(x, temperature=1.0):
+    exp = np.exp(x / temperature)
+    f_x = exp / np.sum(exp)
+    return f_x
 
 
 class Node:
-    def __init__(self, state, p):
+    def __init__(self, state, p, parent=None, player=1):
         self.state = state
         self.p = p
-        self.n = 1
         self.w = 0.0
+        self.n = 1
 
         self.is_leaf = True
         self.children = []
+        self.parent = parent
 
     def __len__(self):
         return self.children.__len__()
@@ -27,52 +32,118 @@ class Node:
     def hash(self):
         return self.state.tobytes()
 
-    def score(self, pn, c_puct):
+    def score(self, pn, c_puct, player):
         u = c_puct * self.p * math.sqrt(pn) / self.n
-        q = self.w / self.n
+        q = (player * self.w) / self.n
         return q + u
 
 
-class MCTC:
-    def __init__(self, model, game, root_state, c_puct=1.0, temp=1.0):
-        self.model = model.eval()
-        self.c_puct = c_puct
-        self.temp = temp
+def mcts_search(root_state, model, game, num_searchs, c_puct=1.0, temperature=1.0):
+    game = game()
 
-        self.game = game(root_state)
-        self.root_node = Node(root_state, p=1.0)
-        self.nodes = {self.game.hash(): self.root_node}
+    def _move_to_leaf(node, player):
+        if node.is_leaf:
+            legal_action = game.get_legal_action(state=node.state)
 
-    def solver(self, num_searchs):
-        for _ in range(num_searchs):
-            pass
+            if not legal_action:
+                value = model.get_value(state=node.state)
+                state = deepcopy(node.state[::-1])
+                node.children = [Node(state=deepcopy(state), p=1.0, parent=node)]
+                node.is_leaf = False
+            else:
+                value, policy = model.inference_state(state=node.state)
+                for action, p in zip(legal_action, policy[legal_action]):
+                    state = game.next_state(state=deepcopy(node.state), action=action)
+                    node.children.append(Node(state=deepcopy(state), p=p, parent=node))
+                node.is_leaf = False
+            return node, value
+        else:
+            pn = node.n
+            scores = np.array([child.score(pn=pn, c_puct=c_puct, player=player) for child in node.children], dtype=np.float32)
+            scores = softmax_with_temp(x=scores, temperature=temperature)
+            action = np.random.choice(node.__len__(), p=scores)
+            node = node.children[action]
+            return _move_to_leaf(node=node, player=player * -1)
 
-    def _move_to_leaf(self):
-        state_hash_trace = []
-        current_node = self.root_node
+    def _back_to_root(node, value):
+        node.w += value
+        node.n += 1
+        if node.parent:
+            _back_to_root(node=node.parent, value=value)
+        else:
+            return 0
 
-        while not current_node.is_leaf:
-            state_hash_trace.append(current_node.hash())
-            pn = math.sqrt(current_node.n)
-            scores = np.array([self.nodes[child].score(pn, self.c_puct) for child in current_node.children], dtype=np.float32)
+    root_node = Node(state=deepcopy(root_state), p=1.0, player=1)
 
-            scores = softmax_with_temp(scores, self.temp)
-            action = np.random.choice(current_node.__len__(), p=scores)
-            current_node = self.nodes[current_node.children[action]]
+    for _ in range(num_searchs):
+        leaf_node, value = _move_to_leaf(node=root_node, player=1)
+        state_code = _back_to_root(node=leaf_node, value=value)
 
-        return state_hash_trace, current_node
+    child_n = np.array([child.n for child in root_node.children], dtype=np.float32)
+    child_scores = softmax_with_temp(child_n, temperature=1.0)
+    return np.random.choice(child_scores.__len__(), p=child_scores)
 
-    def _extend(self, current_node):
-        self.game.__init__(state=current_node())
 
-        legal_action = self.game.get_legal_action()
+@ray.remote
+def self_play(game, init_dict, model, num_searchs, random_play=0, c_puct=1.0, temperature=1.0):
+    play_history = PlayHistory()
+    _game = game
+    game = game(**init_dict)
 
-        value, policy = self.model(self.game.encode_state())
-        value, policy = value.squeeze(0).numpy(), policy.squeeze(0).numpy()
+    for _ in range(random_play):
+        if game.is_done():
+            return play_history
 
-        for action, p in zip(legal_action, policy[legal_action]):
-            state = self.game.get_next_state(action=action)
-            _hash = state.tobytes()
-            self.nodes[_hash] = Node(state=state, p=p)
-            current_node.children.append(_hash)
-        return value
+        play_history.state_list.append(deepcopy(game.state))
+        legale_actions = game.get_legal_action()
+        if legale_actions:
+            action = np.random.choice(a=legale_actions)
+            game.action(action=action)
+        else:
+            action = game.pass_action()
+        play_history.action_list.append(action)
+
+    while not game.is_done():
+        play_history.state_list.append(deepcopy(game.state))
+
+        legal_action = game.get_legal_action(state=None)
+
+        if legal_action:
+            action_index = mcts_search(
+                root_state=game.state, model=model, game=_game, num_searchs=num_searchs, c_puct=c_puct, temperature=temperature
+            )
+            action = legal_action[action_index]
+            game.action(action=action)
+        else:
+            game.play_chenge()
+            action = game.pass_action()
+
+        play_history.action_list.append(action)
+
+    play_history.winner_list = [i % 2 for i in range(1, play_history.__len__() + 1)]
+    return play_history
+
+
+def parallel_self_play(model, num_searchs, num_games, game, init_dict, random_play=0, c_puct=1.0, temperature=1.0):
+    self_play_histry = PlayHistory()
+    model_id = ray.put(model)
+
+    # ray.init(ignore_reinit_error=True)
+    work_in_progresses = [self_play.remote(
+        game=game,
+        init_dict=init_dict,
+        model=model_id,
+        num_searchs=num_searchs,
+        random_play=random_play,
+        c_puct=c_puct,
+        temperature=temperature
+    ) for _ in range(num_games)]
+
+    for i in range(num_games):
+        finished, work_in_progresses = ray.wait(work_in_progresses, num_returns=1)
+        orf = finished[0]
+
+        histry = ray.get(orf)
+        self_play_histry = self_play_histry + histry
+
+    return self_play_histry
