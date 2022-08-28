@@ -1,5 +1,6 @@
 import ray
 from copy import deepcopy
+from tqdm import tqdm
 import math
 import numpy as np
 
@@ -38,8 +39,8 @@ class Node:
         return q + u
 
 
-def mcts_search(root_state, model, game, num_searchs, c_puct=1.0, temperature=1.0):
-    game = game()
+def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, temperature=1.0):
+    game = game(**init_dict)
 
     def _move_to_leaf(node, player):
         if node.is_leaf:
@@ -85,10 +86,9 @@ def mcts_search(root_state, model, game, num_searchs, c_puct=1.0, temperature=1.
 
 
 @ray.remote
-def self_play(game, init_dict, model, num_searchs, random_play=0, c_puct=1.0, temperature=1.0):
+def self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=1.0, temperature=1.0):
     play_history = PlayHistory()
-    _game = game
-    game = game(**init_dict)
+    game = game_module(**init_dict)
 
     for _ in range(random_play):
         if game.is_done():
@@ -110,7 +110,93 @@ def self_play(game, init_dict, model, num_searchs, random_play=0, c_puct=1.0, te
 
         if legal_action:
             action_index = mcts_search(
-                root_state=game.state, model=model, game=_game, num_searchs=num_searchs, c_puct=c_puct, temperature=temperature
+                root_state=game.state,
+                model=model,
+                init_dict=init_dict,
+                game=game_module,
+                num_searchs=num_searchs,
+                c_puct=c_puct,
+                temperature=temperature
+            )
+            action = legal_action[action_index]
+            game.action(action=action)
+        else:
+            game.play_chenge()
+            action = game.pass_action()
+
+        play_history.action_list.append(action)
+
+    if play_history.__len__() % 2 == 0:
+        if game.is_win():
+            play_history.winner_list = [i % 2 for i in range(1, play_history.__len__() + 1)]
+        else:
+            play_history.winner_list = [i % 2 for i in range(play_history.__len__())]
+    else:
+        if game.is_win():
+            play_history.winner_list = [i % 2 for i in range(play_history.__len__())]
+        else:
+            play_history.winner_list = [i % 2 for i in range(1, play_history.__len__() + 1)]
+
+    return play_history
+
+
+def parallel_self_play(model, num_searchs, num_games, game, init_dict, random_play=0, c_puct=1.0, temperature=1.0):
+    self_play_histry = PlayHistory()
+
+    model_id = ray.put(model)
+    # ray.init(ignore_reinit_error=True)
+    work_in_progresses = [self_play.remote(
+        game_module=game,
+        init_dict=init_dict,
+        model=model_id,
+        num_searchs=num_searchs,
+        random_play=random_play,
+        c_puct=c_puct,
+        temperature=temperature
+    ) for _ in range(num_games)]
+
+    for i in tqdm(range(num_games)):
+        finished, work_in_progresses = ray.wait(work_in_progresses, num_returns=1)
+        orf = finished[0]
+
+        histry = ray.get(orf)
+        self_play_histry = self_play_histry + histry
+
+    return self_play_histry
+
+
+def _self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=1.0, temperature=1.0):
+    play_history = PlayHistory()
+    game = game_module(**init_dict)
+
+    for _ in range(random_play):
+        if game.is_done():
+            return play_history
+
+        play_history.state_list.append(deepcopy(game.state))
+        legale_actions = game.get_legal_action()
+        if legale_actions:
+            action = np.random.choice(a=legale_actions)
+            game.action(action=action)
+        else:
+            action = game.pass_action()
+            game.play_chenge()
+        play_history.action_list.append(action)
+
+    while not game.is_done():
+        play_history.state_list.append(deepcopy(game.state))
+
+        legal_action = game.get_legal_action(state=None)
+
+        if legal_action:
+            action_index = mcts_search(
+                root_state=game.state,
+                model=model,
+                init_dict=init_dict,
+                game=game_module,
+                num_searchs=num_searchs,
+                c_puct=c_puct,
+                temperature=temperature
             )
             action = legal_action[action_index]
             game.action(action=action)
@@ -124,26 +210,55 @@ def self_play(game, init_dict, model, num_searchs, random_play=0, c_puct=1.0, te
     return play_history
 
 
-def parallel_self_play(model, num_searchs, num_games, game, init_dict, random_play=0, c_puct=1.0, temperature=1.0):
-    self_play_histry = PlayHistory()
-    model_id = ray.put(model)
+def models_play(first_model, back_model, game_module, init_dict, num_searchs, random_play=0, c_puct=1.0, temperature=1.0):
+    game = game_module(**init_dict)
 
-    # ray.init(ignore_reinit_error=True)
-    work_in_progresses = [self_play.remote(
-        game=game,
-        init_dict=init_dict,
-        model=model_id,
-        num_searchs=num_searchs,
-        random_play=random_play,
-        c_puct=c_puct,
-        temperature=temperature
-    ) for _ in range(num_games)]
+    step = 0
+    for _ in range(random_play):
+        if game.is_done():
+            break
 
-    for i in range(num_games):
-        finished, work_in_progresses = ray.wait(work_in_progresses, num_returns=1)
-        orf = finished[0]
+        legale_actions = game.get_legal_action()
+        if legale_actions:
+            action = np.random.choice(a=legale_actions)
+            game.action(action=action)
+        else:
+            game.play_chenge()
 
-        histry = ray.get(orf)
-        self_play_histry = self_play_histry + histry
+        step += 1
 
-    return self_play_histry
+    while not game.is_done():
+        legal_action = game.get_legal_action(state=None)
+
+        if step % 2 == 0:
+            play_model = first_model
+        else:
+            play_model = back_model
+
+        if legal_action:
+            action_index = mcts_search(
+                root_state=game.state,
+                model=play_model,
+                init_dict=init_dict,
+                game=game_module,
+                num_searchs=num_searchs,
+                c_puct=c_puct,
+                temperature=temperature
+            )
+            action = legal_action[action_index]
+            game.action(action=action)
+        else:
+            game.play_chenge()
+
+        step += 1
+
+    if step % 2 == 0:
+        if game.is_win():
+            return 1     # win first model
+        else:
+            return 0    # win back model
+    else:
+        if game.is_win():
+            return 0    # win back model
+        else:
+            return 1     # win first model
