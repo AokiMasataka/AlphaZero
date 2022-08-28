@@ -71,8 +71,8 @@ class PlayHistory:
         self.winner_list = histry_dict['winner_list']
 
     def get_train_valid_data(self, rate=0.8):
-        train_dict, valid_dict, split_point = self._train_valid_split(rate=rate)
-        return train_dict, valid_dict, split_point
+        train_history, valid_history, split_point = self._train_valid_split(rate=rate)
+        return train_history, valid_history, split_point
 
     def _train_valid_split(self, rate=0.8):
         histry_length = self.state_list.__len__()
@@ -84,21 +84,48 @@ class PlayHistory:
             winner_list=self.winner_list[:split_point]
         )
 
-        valid_history = PlayHistory(
-            state_list=self.state_list[split_point:],
-            action_list=self.action_list[split_point:],
-            winner_list=self.winner_list[split_point:]
-        )
+        if rate == 1:
+            valid_history = None
+        else:
+            valid_history = PlayHistory(
+                state_list=self.state_list[split_point:],
+                action_list=self.action_list[split_point:],
+                winner_list=self.winner_list[split_point:]
+            )
 
         return train_history, valid_history, split_point
 
 
 def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False):
     if hflip:
-        pass
+        size = play_history.state_list[0][1]
+
+        def h_flip_action(action):
+            x = action // size
+            y = action % size
+            return x * size + ((size - 1) - y)
+
+        flip_state_list = [state[:, ::-1, :] for state in play_history.state_list]
+        flip_action_list = list(map(h_flip_action, play_history.action_list))
+        flip_winner_list = [winner for winner in play_history.winner_list]
+        del size
+
+        play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
 
     if vflip:
-        pass
+        size = play_history.state_list[0][2]
+
+        def v_flip_action(action):
+            x = action // size
+            y = action % size
+            return ((size - 1) - x) + y
+
+        flip_state_list = [state[:, :, ::-1] for state in play_history.state_list]
+        flip_action_list = list(map(v_flip_action, play_history.action_list))
+        flip_winner_list = [winner for winner in play_history.winner_list]
+        del size
+
+        play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
 
     if rot:
         pass
@@ -126,6 +153,14 @@ class AlphaDataset(Dataset):
         action = torch.tensor(action, dtype=torch.long)
         winner = torch.tensor(winner, dtype=torch.float)
         return state, action, winner
+
+    @staticmethod
+    def collate_fn(batch):
+        states, actions, winners = list(zip(*batch))
+        states = torch.stack(states, dim=0)
+        actions = torch.tensor(data=actions, dtype=torch.long)
+        winners = torch.tensor(data=winners, dtype=torch.float)
+        return states, actions, winners
 
 
 def build_loader(self_play_histry, batch_size=64, split_rate=0.8):
