@@ -3,8 +3,10 @@ import numpy as np
 from scipy.ndimage import shift
 
 from .base import GameBase
+from .registry import GAMES
 
 
+@GAMES.register_module
 class Reversi(GameBase):
     def __init__(self, size=8, state=None):
         if state is None:
@@ -53,9 +55,9 @@ class Reversi(GameBase):
 
     def is_win(self):
         if np.sum(self.state[0]) < np.sum(self.state[1]):
-            return 0
+            return False
         else:
-            return 1
+            return True
 
     def play_chenge(self):
         self.state = self.state[::-1]
@@ -164,7 +166,7 @@ class Reversi(GameBase):
         return self.state.shape[1] * self.state.shape[1]
 
     def max_action(self):
-        return self.state.shape[1] * self.state.shape[1]
+        return self.state.shape[1] * self.state.shape[1] + 1
 
     def next_state(self, action, state):
         x = action // self.size
@@ -215,4 +217,3 @@ class Reversi(GameBase):
                 _str_ += '\n'
             print(_str_)
             print()
-
