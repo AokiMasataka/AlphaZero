@@ -1,22 +1,28 @@
 import os
 import json
+import logging
 import numpy
 import torch
 from torch import nn
+from torch.nn import functional
+from torch.utils.data import DataLoader
+from torch.optim import AdamW, lr_scheduler
+
+from data import AlphaDataset
 
 
-__all__ = ['build_model']
+__all__ = ['ScaleModel', 'build_model', 'trainner']
 
 
 class ModelConfig:
-    def __init__(self, in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1):
+    def __init__(self, in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1, act_fn='relu'):
         self.in_channels = in_channels
         self.dim = dim
         self.depth = depth
         self.max_actions = max_actions
         self.eps = eps
         self.momentum = momentum
-        self.act_fn = 'relu'
+        self.act_fn = act_fn
 
     def to_dict(self):
         return self.__dict__
@@ -30,6 +36,16 @@ class ModelConfig:
         with open(load_dir + '/config.json', 'r') as f:
             config_dict = json.load(f)
         return ModelConfig(**config_dict)
+
+    def __str__(self):
+        _str_ = f'in_channels: {self.in_channels}\n'
+        _str_ += f'dim: {self.dim}\n'
+        _str_ += f'depth: {self.depth}\n'
+        _str_ += f'max_actions: {self.max_actions}\n'
+        _str_ += f'eps: {self.eps}\n'
+        _str_ += f'momentum: {self.momentum}\n'
+        _str_ += f'activation: {self.act_fn}'
+        return _str_
 
 
 class Block(nn.Module):
@@ -110,28 +126,121 @@ class ScaleModel(nn.Module):
     def save_pretrained(self, save_dir):
         os.makedirs(save_dir, exist_ok=True)
         self.config.save_config(save_dir)
-        torch.save(self.state_dict(), save_dir)
+        torch.save(self.state_dict(), save_dir + '/model.pth')
 
     @staticmethod
-    def from_pretrained(laod_dir):
-        config = ModelConfig.load_config(laod_dir)
+    def from_pretrained(load_dir):
+        config = ModelConfig.load_config(load_dir)
         model = ScaleModel(config)
-        model.laod_state_dict(torch.load(laod_dir + 'model.pth'))
+        model.load_state_dict(torch.load(load_dir + '/model.pth'))
         return model
 
 
-def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1):
+def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1, act_fn='relu'):
     model_config = ModelConfig(
         in_channels=in_channels,
         dim=dim,
         depth=depth,
         max_actions=max_actions,
         eps=eps,
-        momentum=momentum
+        momentum=momentum,
+        act_fn=act_fn
     )
 
     model = ScaleModel(config=model_config)
+
+    # model_config_str = str(model_config)
+    # model_config_str = model_config_str.replace('\n', '\n\t')
+    # logging.info(f'build model: \n\t{model_config_str}')
+
     return model
+
+
+def trainner(model, play_history, train_config: dict):
+    model.train()
+    train_history, valid_history, split_point = play_history.get_train_valid_data(rate=train_config['traindata_rate'])
+    train_dataset = AlphaDataset(play_histry=train_history)
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=train_config['batch_size'],
+        shuffle=True,
+        num_workers=train_config['num_workers'],
+        collate_fn=AlphaDataset.collate_fn,
+        pin_memory=True,
+    )
+
+    if valid_history is not None:
+        valid_dataset = AlphaDataset(play_histry=valid_history)
+        valid_loader = DataLoader(
+            dataset=valid_dataset,
+            batch_size=train_config['batch_size'] * 2,
+            shuffle=False,
+            num_workers=train_config['num_workers'],
+            collate_fn=AlphaDataset.collate_fn,
+            pin_memory=True,
+        )
+    else:
+        valid_loader = None
+
+    optimizer = AdamW(params=model.parameters(), lr=train_config['base_lr'])
+    scheduler = lr_scheduler.CosineAnnealingLR(
+        optimizer=optimizer, T_max=train_config['epochs'], eta_min=train_config['min_lr']
+    )
+
+    for epoch in range(train_config['epochs']):
+        train_value_mean = Avg()
+        train_policy_mean = Avg()
+        for states, actions, winners in train_loader:
+            optimizer.zero_grad()
+
+            value, policy = model(states)
+            value_loss = functional.mse_loss(input=value.view(-1), target=winners)
+            policy_loss = functional.cross_entropy(input=policy, target=actions)
+
+            loss = train_config['value_loss_weight'] * value_loss + train_config['policy_loss_weight'] * policy_loss
+
+            loss.backward()
+            optimizer.step()
+
+            train_value_mean.update(value=value_loss.item())
+            train_policy_mean.update(value=policy_loss.item())
+
+        scheduler.step()
+
+        if valid_loader is not None:
+            valid_value_mean = Avg()
+            valid_policy_mean = Avg()
+            for states, actions, winners in valid_loader:
+                with torch.no_grad():
+                    value, policy = model(states)
+                    value_loss = functional.mse_loss(input=value.view(-1), target=winners)
+                    policy_loss = functional.cross_entropy(input=policy, target=actions)
+
+                value_loss = value_loss.item()
+                policy_loss = policy_loss.item()
+
+                valid_value_mean.update(value=value_loss)
+                valid_policy_mean.update(value=policy_loss)
+
+        msg = f'epochs: [{epoch}/{train_config["epochs"]}]'
+        msg += f' - train value loss: {train_value_mean():.6f} - train policy loss: {train_policy_mean():.6f}'
+        if valid_loader is not None:
+            msg += f' - valid value loss: {valid_value_mean():.6f} - valid policy loss: {valid_policy_mean():.6f}'
+        logging.info(msg=msg)
+    model.eval()
+
+
+class Avg:
+    def __init__(self):
+        self.value = 0.0
+        self.n = 0
+
+    def __call__(self):
+        return self.value / self.n
+
+    def update(self, value):
+        self.value += value
+        self.n += 1
 
 
 if __name__ == '__main__':
