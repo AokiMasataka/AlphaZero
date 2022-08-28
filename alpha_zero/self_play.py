@@ -33,16 +33,16 @@ class Node:
     def hash(self):
         return self.state.tobytes()
 
-    def score(self, pn, c_puct, player):
+    def score(self, pn, c_puct):
         u = c_puct * self.p * math.sqrt(pn) / self.n
-        q = (player * self.w) / self.n
+        q = self.w / self.n
         return q + u
 
 
 def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, temperature=1.0):
     game = game(**init_dict)
 
-    def _move_to_leaf(node, player):
+    def _move_to_leaf(node):
         if node.is_leaf:
             legal_action = game.get_legal_action(state=node.state)
 
@@ -60,17 +60,17 @@ def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, tem
             return node, value
         else:
             pn = node.n
-            scores = np.array([child.score(pn=pn, c_puct=c_puct, player=player) for child in node.children], dtype=np.float32)
+            scores = np.array([child.score(pn=pn, c_puct=c_puct) for child in node.children], dtype=np.float32)
             scores = softmax_with_temp(x=scores, temperature=temperature)
             action = np.random.choice(node.__len__(), p=scores)
             node = node.children[action]
-            return _move_to_leaf(node=node, player=player * -1)
+            return _move_to_leaf(node=node)
 
     def _back_to_root(node, value):
         node.w += value
         node.n += 1
         if node.parent:
-            _back_to_root(node=node.parent, value=value)
+            _back_to_root(node=node.parent, value=-value)
         else:
             return 0
 
