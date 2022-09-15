@@ -148,17 +148,13 @@ def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, moment
     )
 
     model = ScaleModel(config=model_config)
-
-    # model_config_str = str(model_config)
-    # model_config_str = model_config_str.replace('\n', '\n\t')
-    # logging.info(f'build model: \n\t{model_config_str}')
-
     return model
 
 
 def trainner(model, play_history, train_config: dict):
     model.train()
     train_history, valid_history, split_point = play_history.get_train_valid_data(rate=train_config['traindata_rate'])
+    logging.info(msg=f'train size: {train_history.__len__()} - valid size: {valid_history.__len__()}')
     train_dataset = AlphaDataset(play_histry=train_history)
     train_loader = DataLoader(
         dataset=train_dataset,
@@ -186,7 +182,7 @@ def trainner(model, play_history, train_config: dict):
     scheduler = lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=train_config['epochs'], eta_min=train_config['min_lr']
     )
-
+    print('INFO: trainning...')
     for epoch in range(train_config['epochs']):
         train_value_mean = Avg()
         train_policy_mean = Avg()

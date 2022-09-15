@@ -99,14 +99,18 @@ class PlayHistory:
         return train_history, valid_history, split_point
 
 
-def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False):
+def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False, max_action=-1):
+    state_shape = play_history.state_list[0].shape
     if hflip:
-        size = play_history.state_list[0][1]
+        size = state_shape[1]
 
         def h_flip_action(action):
-            x = action // size
-            y = action % size
-            return x * size + ((size - 1) - y)
+            if action == max_action:
+                return action
+            else:
+                x = action // size
+                y = action % size
+                return x * size + ((size - 1) - y)
 
         flip_state_list = [state[:, ::-1, :] for state in play_history.state_list]
         flip_action_list = list(map(h_flip_action, play_history.action_list))
@@ -116,12 +120,15 @@ def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False)
         play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
 
     if vflip:
-        size = play_history.state_list[0][2]
+        size = state_shape[2]
 
         def v_flip_action(action):
-            x = action // size
-            y = action % size
-            return ((size - 1) - x) + y
+            if action == max_action:
+                return action
+            else:
+                x = action // size
+                y = action % size
+                return ((size - 1) - x) * size + y
 
         flip_state_list = [state[:, :, ::-1] for state in play_history.state_list]
         flip_action_list = list(map(v_flip_action, play_history.action_list))

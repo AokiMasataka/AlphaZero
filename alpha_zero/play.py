@@ -32,7 +32,7 @@ class PlayState:
             action_index, value = mcts_search(
                 root_state=self.game.state,
                 model=self.model,
-                game=self.game_module,
+                game_module=self.game_module,
                 init_dict=self.init_dict,
                 num_searchs=num_searchs,
                 c_puct=c_puct,
@@ -68,7 +68,7 @@ def play_cui(model, game_module, init_dict, num_searchs, c_puct):
 
     if play_state.game.winner() == 1:
         print(f'winner: O')
-    elif play_state.game.winner() == 0:
+    elif play_state.game.winner() == -1:
         print(f'winner: X')
     else:
         print('Draw')

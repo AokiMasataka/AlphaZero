@@ -1,10 +1,10 @@
-work_dir = './test'
+work_dir = './works/reversi_6x6'
 save_play_history = False
 
 self_play_config = dict(
-    generation=16,
-    num_searchs=96,
-    num_games=1024,
+    generation=8,
+    num_searchs=128,
+    num_games=512,
     game='Reversi',
     init_dict=dict(size=6),
     random_play=8,
@@ -23,12 +23,14 @@ model_config = dict(
 )
 
 train_config = dict(
-    epochs=8,
-    batch_size=32,
-    num_workers=4,
+    epochs=4,
+    batch_size=128,
+    num_workers=2,
     base_lr=5e-3,
     min_lr=1e-4,
-    value_loss_weight=1.0,
+    value_loss_weight=0.25,
     policy_loss_weight=1.0,
-    traindata_rate=0.8
+    traindata_rate=0.8,
+    hflip=True,
+    vflip=True
 )

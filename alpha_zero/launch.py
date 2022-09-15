@@ -3,7 +3,7 @@ import logging
 from copy import deepcopy
 
 from game import GAMES
-from data import PlayHistory
+from data import data_augment
 from self_play import parallel_self_play, models_play
 from model import trainner, ScaleModel, build_model
 
@@ -46,9 +46,9 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
     self_play_config['game'] = GAMES.get_module(name=self_play_config['game'])
     init_args = self_play_config['init_dict']
     logging.info(f'game name: {self_play_config["game"]} - init args: {init_args}')
-    game = self_play_config['game']()
+    game = self_play_config['game'](**init_args)
 
-    if model_config.get('max_action', None) is None:
+    if model_config.get('max_actions', None) is None:
         model_config['max_actions'] = game.max_action()
 
     if 'pretarined_path' not in model_config.keys():
@@ -75,6 +75,12 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
             play_history = parallel_self_play(model=model, **random_play_config)
         else:
             play_history = parallel_self_play(model=model, **self_play_config)
+        play_history = data_augment(
+            play_history=play_history,
+            hflip=train_config['hflip'],
+            vflip=train_config['vflip'],
+            max_action=model_config['max_actions'] - 1
+        )
 
         trainner(model=model, play_history=play_history, train_config=train_config)
         new_model_winrate = model_evalate(
@@ -91,7 +97,7 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
 
         logging.info(msg=f'new model winrate: {new_model_winrate:.4f}')
 
-        save_dir = f'{work_dir}/gen{gen}'
+        save_dir = f'{work_dir}/model_gen{gen}'
         os.makedirs(save_dir, exist_ok=True)
         model.save_pretrained(save_dir=save_dir)
 
