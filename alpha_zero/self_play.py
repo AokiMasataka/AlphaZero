@@ -45,7 +45,8 @@ class Node:
         return q + u
 
 
-def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, temperature=1.0):
+def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, temperature=1.0, return_value=False, mode='self_play'):
+    assert mode in ('play', 'self_play')
     game = game(**init_dict)
 
     def _move_to_leaf(node):
@@ -98,8 +99,16 @@ def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, tem
         state_code = _back_to_root(node=leaf_node, value=value)
 
     child_n = np.array([child.n for child in root_node.children], dtype=np.float32)
-    child_scores = softmax_with_temp(child_n, temperature=1.0)
-    return np.random.choice(child_scores.__len__(), p=child_scores)
+    if mode == 'self_play':
+        child_scores = softmax_with_temp(child_n, temperature=temperature)
+        action = np.random.choice(child_scores.__len__(), p=child_scores)
+    else:
+        action = np.argmax(child_n)
+
+    if return_value:
+        return action, root_node.w
+    else:
+        return action
 
 
 @ray.remote
@@ -159,8 +168,7 @@ def self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=
 def parallel_self_play(model, num_searchs, num_games, game, init_dict, random_play=0, c_puct=1.0, temperature=1.0):
     self_play_histry = PlayHistory()
 
-    ray.init(num_cpus=1)
-    # ray.init(num_cpus=os.cpu_count())
+    ray.init(num_cpus=os.cpu_count())
     model_id = ray.put(model)
 
     work_ids = []

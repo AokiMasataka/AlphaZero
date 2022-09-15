@@ -29,16 +29,18 @@ class PlayState:
         elif legal_action.__len__() == 1:
             action = legal_action[0]
         else:
-            action_index = mcts_search(
+            action_index, value = mcts_search(
                 root_state=self.game.state,
                 model=self.model,
                 game=self.game_module,
                 init_dict=self.init_dict,
                 num_searchs=num_searchs,
                 c_puct=c_puct,
-                temperature=temperature
+                temperature=temperature,
+                return_value=True
             )
             action = legal_action[action_index]
+            print(f'AI value: {value:.4f}')
 
         if action is not None:
             self.game.action(action=action)
@@ -64,9 +66,9 @@ def play_cui(model, game_module, init_dict, num_searchs, c_puct):
         else:
             play_state.ai_action(num_searchs=num_searchs, c_puct=c_puct)
 
-    if play_state.game.winner == 1:
+    if play_state.game.winner() == 1:
         print(f'winner: O')
-    elif play_state.game.winner == 0:
+    elif play_state.game.winner() == 0:
         print(f'winner: X')
     else:
         print('Draw')
@@ -74,10 +76,10 @@ def play_cui(model, game_module, init_dict, num_searchs, c_puct):
 
 def main():
     parser = argparse.ArgumentParser(description='Alpha zero')
-    parser.add_argument('-c', '--config', default=None, type=str, description='path to config')
-    parser.add_argument('-m', '--model_path', default=None, type=str, description='path to config')
-    parser.add_argument('-g', '--gui', action='store_true', description='is use gui')
-    parser.add_argument('-s', '--searchs', default=-1, type=str, description='mcts num_searchs')
+    parser.add_argument('-c', '--config', default=None, type=str, help='path to config')
+    parser.add_argument('-m', '--model_path', default=None, type=str, help='path to config')
+    parser.add_argument('-g', '--gui', action='store_true', help='is use gui')
+    parser.add_argument('-s', '--searchs', default=-1, type=int, help='mcts num_searchs')
     args = parser.parse_args()
 
     assert args.model_path is not None, f'--model_path expect arg'

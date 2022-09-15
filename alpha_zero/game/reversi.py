@@ -231,21 +231,22 @@ class Reversi(GameBase):
         legal_actions = self.get_legal_action()
         _str_ = ''
         for legal_action in legal_actions:
-            x = legal_action // self.size
-            y = legal_action % self.size
-            _str_ += f'({x}, {y}) '
+            _x = legal_action // self.size
+            _y = legal_action % self.size
+            _str_ += f'({_x}, {_y}) '
         print(_str_)
         if x is None:
-            x = input('x =')
-            y = input('y =')
+            x = int(input('x ='))
+            y = int(input('y ='))
+
         action = self.xy_to_action(x=x, y=y)
         self.action(action=action)
         return action
 
     def winner(self):
-        if self.state[1 - self.player] < self.state[self.player]:
+        if self.state[1 - self.player].sum() < self.state[self.player].sum():
             return 1
-        elif self.state[self.player] < self.state[1 - self.player]:
+        elif self.state[self.player].sum() < self.state[1 - self.player].sum():
             return 0
         else:
             return -1
