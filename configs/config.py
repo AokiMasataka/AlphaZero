@@ -3,8 +3,8 @@ save_play_history = False
 
 self_play_config = dict(
     generation=16,
-    num_searchs=64,
-    num_games=64,
+    num_searchs=96,
+    num_games=1024,
     game='Reversi',
     init_dict=dict(size=6),
     random_play=8,
@@ -16,7 +16,7 @@ model_config = dict(
     in_channels=2,
     dim=128,
     depth=4,
-    max_actions=65,
+    max_actions=37,
     eps=1e-6,
     momentum=0.1,
     pretarined_path=None

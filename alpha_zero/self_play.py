@@ -1,20 +1,26 @@
+import os
+
 import ray
 from copy import deepcopy
-from tqdm import tqdm
 import math
 import numpy as np
 
 from data import PlayHistory
 
 
+# def softmax_with_temp(x, temperature=1.0):
+#     x = x / np.max(x)
+#     e = np.exp(x / temperature)
+#     return e / np.sum(e)
+
+
 def softmax_with_temp(x, temperature=1.0):
-    exp = np.exp(x / temperature)
-    f_x = exp / np.sum(exp)
-    return f_x
+    f = np.exp((x - np.max(x)) / temperature)  # shift values
+    return f / f.sum(axis=0)
 
 
 class Node:
-    def __init__(self, state, p, parent=None, player=1):
+    def __init__(self, state, p, parent=None):
         self.state = state
         self.p = p
         self.w = 0.0
@@ -59,10 +65,13 @@ def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, tem
                 node.is_leaf = False
             return node, value
         else:
-            pn = node.n
-            scores = np.array([child.score(pn=pn, c_puct=c_puct) for child in node.children], dtype=np.float32)
-            scores = softmax_with_temp(x=scores, temperature=temperature)
-            action = np.random.choice(node.__len__(), p=scores)
+            scores = np.array([child.score(pn=node.n, c_puct=c_puct) for child in node.children], dtype=np.float32)
+
+            # scores = softmax_with_temp(x=scores, temperature=temperature)
+            # action = np.random.choice(node.__len__(), p=scores)
+
+            action = np.argmax(scores)
+
             node = node.children[action]
             return _move_to_leaf(node=node)
 
@@ -74,10 +83,18 @@ def mcts_search(root_state, model, game, init_dict, num_searchs, c_puct=1.0, tem
         else:
             return 0
 
-    root_node = Node(state=deepcopy(root_state), p=1.0, player=1)
+    root_node = Node(state=deepcopy(root_state), p=1.0)
 
     for _ in range(num_searchs):
-        leaf_node, value = _move_to_leaf(node=root_node, player=1)
+        leaf_node, value = _move_to_leaf(node=root_node)
+        game.__init__(state=leaf_node.state)
+        if game.is_done():
+            if np.sum(leaf_node.state[0]) < np.sum(leaf_node.state[1]):
+                value = -1
+            elif np.sum(leaf_node.state[1]) < np.sum(leaf_node.state[0]):
+                value = 1
+            else:
+                value = 0
         state_code = _back_to_root(node=leaf_node, value=value)
 
     child_n = np.array([child.n for child in root_node.children], dtype=np.float32)
@@ -92,7 +109,7 @@ def self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=
 
     for _ in range(random_play):
         if game.is_done():
-            return play_history
+            break
 
         play_history.state_list.append(deepcopy(game.state))
         legale_actions = game.get_legal_action()
@@ -123,19 +140,18 @@ def self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=
         else:
             game.play_chenge()
             action = game.pass_action()
-
         play_history.action_list.append(action)
 
     if play_history.__len__() % 2 == 0:
         if game.is_win():
-            play_history.winner_list = [i % 2 for i in range(1, play_history.__len__() + 1)]
+            play_history.winner_list = list(1 if i % 2 else -1 for i in range(play_history.__len__()))
         else:
-            play_history.winner_list = [i % 2 for i in range(play_history.__len__())]
+            play_history.winner_list = list(-1 if i % 2 else 1 for i in range(play_history.__len__()))
     else:
         if game.is_win():
-            play_history.winner_list = [i % 2 for i in range(play_history.__len__())]
+            play_history.winner_list = list(-1 if i % 2 else 1 for i in range(play_history.__len__()))
         else:
-            play_history.winner_list = [i % 2 for i in range(1, play_history.__len__() + 1)]
+            play_history.winner_list = list(1 if i % 2 else -1 for i in range(play_history.__len__()))
 
     return play_history
 
@@ -143,25 +159,20 @@ def self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=
 def parallel_self_play(model, num_searchs, num_games, game, init_dict, random_play=0, c_puct=1.0, temperature=1.0):
     self_play_histry = PlayHistory()
 
+    ray.init(num_cpus=1)
+    # ray.init(num_cpus=os.cpu_count())
     model_id = ray.put(model)
-    # ray.init(ignore_reinit_error=True)
-    work_in_progresses = [self_play.remote(
-        game_module=game,
-        init_dict=init_dict,
-        model=model_id,
-        num_searchs=num_searchs,
-        random_play=random_play,
-        c_puct=c_puct,
-        temperature=temperature
-    ) for _ in range(num_games)]
 
-    for i in tqdm(range(num_games)):
-        finished, work_in_progresses = ray.wait(work_in_progresses, num_returns=1)
-        orf = finished[0]
+    work_ids = []
+    for _ in range(num_games):
+        work_id = self_play.remote(game, init_dict, model_id, num_searchs, random_play, c_puct, temperature)
+        work_ids.append(work_id)
 
-        histry = ray.get(orf)
+    for work_id in work_ids:
+        histry = ray.get(work_id)
         self_play_histry = self_play_histry + histry
 
+    ray.shutdown()
     return self_play_histry
 
 
@@ -203,7 +214,6 @@ def _self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct
         else:
             game.play_chenge()
             action = game.pass_action()
-
         play_history.action_list.append(action)
 
     play_history.winner_list = [i % 2 for i in range(1, play_history.__len__() + 1)]

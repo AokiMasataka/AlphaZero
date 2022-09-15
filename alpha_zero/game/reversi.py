@@ -27,17 +27,26 @@ class Reversi(GameBase):
         return deepcopy(self.state)
 
     def __str__(self):
-        _str_ = ''
+        _str_ = ' '
+
         for i in range(self.size):
+            _str_ += str(i)
+        _str_ += '\n'
+
+        for i in range(self.size):
+            _str_ += str(i)
             for j in range(self.size):
-                if self.state[0, i, j] == 1:
+                if self.state[self.player, i, j] == 1:
                     _str_ += 'O'
-                elif self.state[1, i, j] == 1:
+                elif self.state[1 - self.player, i, j] == 1:
                     _str_ += 'X'
                 else:
                     _str_ += '-'
             _str_ += '\n'
         return _str_
+
+    def xy_to_action(self, x, y):
+        return x * self.size + y
 
     def is_done(self):
         if self.done:
@@ -61,6 +70,7 @@ class Reversi(GameBase):
 
     def play_chenge(self):
         self.state = self.state[::-1]
+        self.player = 1 - self.player
 
     def action(self, action):
         x = action // self.size
@@ -216,4 +226,26 @@ class Reversi(GameBase):
                             _str_ += '-'
                 _str_ += '\n'
             print(_str_)
-            print()
+
+    def api(self, x=None, y=None):
+        legal_actions = self.get_legal_action()
+        _str_ = ''
+        for legal_action in legal_actions:
+            x = legal_action // self.size
+            y = legal_action % self.size
+            _str_ += f'({x}, {y}) '
+        print(_str_)
+        if x is None:
+            x = input('x =')
+            y = input('y =')
+        action = self.xy_to_action(x=x, y=y)
+        self.action(action=action)
+        return action
+
+    def winner(self):
+        if self.state[1 - self.player] < self.state[self.player]:
+            return 1
+        elif self.state[self.player] < self.state[1 - self.player]:
+            return 0
+        else:
+            return -1

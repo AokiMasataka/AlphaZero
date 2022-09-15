@@ -44,7 +44,10 @@ class PlayHistory:
             self.action_list += history.action_list
             self.winner_list += history.winner_list
 
-        assert state_list.__len__() == action_list.__len__() == winner_list.__len__(), 'histry length error'
+        assert state_list.__len__() == action_list.__len__() == winner_list.__len__(), f'histry length error: ' \
+                                                                                       f'{state_list.__len__()} - ' \
+                                                                                       f'{action_list.__len__()} - ' \
+                                                                                       f'{winner_list.__len__()}'
         self.state_list += state_list
         self.action_list += action_list
         self.winner_list += winner_list

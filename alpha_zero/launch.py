@@ -65,12 +65,17 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
     logging.info(f'build model: \n\t{model_config_str}')
 
     generation = self_play_config.pop('generation')
+    random_play_config = deepcopy(self_play_config)
+    random_play_config['random_play'] = 1000
+
     for gen in range(generation):
         logging.info(f'generation {gen} start selfplay')
         old_model = deepcopy(model)
-        play_history = parallel_self_play(model=model, **self_play_config)
+        if gen == 0:
+            play_history = parallel_self_play(model=model, **random_play_config)
+        else:
+            play_history = parallel_self_play(model=model, **self_play_config)
 
-        logging.info('start selfplay')
         trainner(model=model, play_history=play_history, train_config=train_config)
         new_model_winrate = model_evalate(
             old_model=old_model,
