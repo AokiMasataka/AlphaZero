@@ -68,6 +68,14 @@ class Reversi(GameBase):
         else:
             return True
 
+    def winner(self):
+        if self.state[1 - self.player].sum() < self.state[self.player].sum():
+            return 1
+        elif self.state[self.player].sum() < self.state[1 - self.player].sum():
+            return -1
+        else:
+            return 0
+
     def play_chenge(self):
         self.state = self.state[::-1]
         self.player = 1 - self.player
@@ -155,10 +163,6 @@ class Reversi(GameBase):
 
         return legal_actions
 
-    def get_next_state(self, action):
-        state = deepcopy(self.state)
-        return self.next_state(action=action, state=state)
-
     def random_action(self):
         if self.is_done():
             return -1
@@ -178,15 +182,17 @@ class Reversi(GameBase):
     def max_action(self):
         return self.state.shape[1] * self.state.shape[1] + 1
 
-    def next_state(self, action, state):
-        x = action // self.size
-        y = action % self.size
+    @staticmethod
+    def get_next_state(state, action):
+        size = state.shape[1]
+        x = action // size
+        y = action % size
         state[0, x, y] = 1
 
         for dx, dy in ((1, 1), (1, 0), (1, -1), (0, 1), (0, -1), (-1, 1), (-1, 0), (-1, -1)):
-            for i in range(1, self.size):
+            for i in range(1, size):
                 pos_x, pos_y = i * dx + x, i * dy + y
-                if 0 <= pos_x < self.size and 0 <= pos_y < self.size:
+                if 0 <= pos_x < size and 0 <= pos_y < size:
                     if state[1, pos_x, pos_y]:
                         pass
                     elif state[0, pos_x, pos_y]:
@@ -242,11 +248,3 @@ class Reversi(GameBase):
         action = self.xy_to_action(x=x, y=y)
         self.action(action=action)
         return action
-
-    def winner(self):
-        if self.state[1 - self.player].sum() < self.state[self.player].sum():
-            return 1
-        elif self.state[self.player].sum() < self.state[1 - self.player].sum():
-            return 0
-        else:
-            return -1
