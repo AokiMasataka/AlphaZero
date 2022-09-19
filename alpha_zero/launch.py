@@ -101,5 +101,10 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
         os.makedirs(save_dir, exist_ok=True)
         model.save_pretrained(save_dir=save_dir)
 
+        if 0.52 < new_model_winrate:
+            pass
+        else:
+            model = deepcopy(old_model)
+
         if save_play_history:
             play_history.save_histry(save_path=save_dir + '/play_history.pkl')

@@ -66,6 +66,7 @@ def play_cui(model, game_module, init_dict, num_searchs, c_puct):
         else:
             play_state.ai_action(num_searchs=num_searchs, c_puct=c_puct)
 
+    print(play_state.game)
     if play_state.game.winner() == 1:
         print(f'winner: O')
     elif play_state.game.winner() == -1:

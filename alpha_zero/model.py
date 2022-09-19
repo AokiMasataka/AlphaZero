@@ -183,7 +183,7 @@ def trainner(model, play_history, train_config: dict):
         optimizer=optimizer, T_max=train_config['epochs'], eta_min=train_config['min_lr']
     )
     print('INFO: trainning...')
-    for epoch in range(train_config['epochs']):
+    for epoch in range(1, train_config['epochs'] + 1):
         train_value_mean = Avg()
         train_policy_mean = Avg()
         for states, actions, winners in train_loader:
