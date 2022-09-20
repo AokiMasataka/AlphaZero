@@ -6,7 +6,7 @@ from tqdm import tqdm
 import math
 import numpy as np
 
-from data import PlayHistory
+from .data import PlayHistory
 
 
 def softmax_with_temp(x, temperature=1.0):

@@ -2,10 +2,10 @@ import os
 import logging
 from copy import deepcopy
 
-from game import GAMES
-from data import data_augment
-from self_play import parallel_self_play, models_play
-from model import trainner, ScaleModel, build_model
+from .game import GAMES
+from .data import data_augment
+from .self_play import parallel_self_play, models_play
+from .model import trainner, ScaleModel, build_model
 
 
 def model_evalate(
@@ -75,12 +75,16 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
             play_history = parallel_self_play(model=model, **random_play_config)
         else:
             play_history = parallel_self_play(model=model, **self_play_config)
+        logging.info('end selfplay')
+        
+        logging.info('start data augment')
         play_history = data_augment(
             play_history=play_history,
-            hflip=train_config['hflip'],
-            vflip=train_config['vflip'],
+            hflip=train_config.get('hflip', False),
+            vflip=train_config.get('vflip', False),
             max_action=model_config['max_actions'] - 1
         )
+        logging.info('end data augment')
 
         trainner(model=model, play_history=play_history, train_config=train_config)
         new_model_winrate = model_evalate(
