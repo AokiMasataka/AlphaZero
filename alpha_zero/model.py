@@ -8,7 +8,7 @@ from torch.nn import functional
 from torch.utils.data import DataLoader
 from torch.optim import AdamW, lr_scheduler
 
-from data import AlphaDataset
+from .data import build_loader
 
 
 __all__ = ['ScaleModel', 'build_model', 'trainner']
@@ -153,40 +153,26 @@ def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, moment
 
 def trainner(model, play_history, train_config: dict):
     model.train()
-    train_history, valid_history, split_point = play_history.get_train_valid_data(rate=train_config['traindata_rate'])
-    logging.info(msg=f'train size: {train_history.__len__()} - valid size: {valid_history.__len__()}')
-    train_dataset = AlphaDataset(play_histry=train_history)
-    train_loader = DataLoader(
-        dataset=train_dataset,
-        batch_size=train_config['batch_size'],
-        shuffle=True,
-        num_workers=train_config['num_workers'],
-        collate_fn=AlphaDataset.collate_fn,
-        pin_memory=True,
-    )
 
-    if valid_history is not None:
-        valid_dataset = AlphaDataset(play_histry=valid_history)
-        valid_loader = DataLoader(
-            dataset=valid_dataset,
-            batch_size=train_config['batch_size'] * 2,
-            shuffle=False,
-            num_workers=train_config['num_workers'],
-            collate_fn=AlphaDataset.collate_fn,
-            pin_memory=True,
-        )
-    else:
-        valid_loader = None
+    train_loader, valid_loader = build_laoder(
+        self_play_history=play_history,
+        batch_size=train_config['batch_size'],
+        num_workers=train_config['num_workers'],
+        split_rate=train_config['traindata_rate']
+    )
 
     optimizer = AdamW(params=model.parameters(), lr=train_config['base_lr'])
     scheduler = lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=train_config['epochs'], eta_min=train_config['min_lr']
     )
-    print('INFO: trainning...')
+
+    log_step = train_loader.__len__() // 10
+
+    logging.info(msg='INFO: trainning...')
     for epoch in range(1, train_config['epochs'] + 1):
         train_value_mean = Avg()
         train_policy_mean = Avg()
-        for states, actions, winners in train_loader:
+        for step, (states, actions, winners) in enumerate(train_loader, 1):
             optimizer.zero_grad()
 
             value, policy = model(states)
@@ -200,6 +186,12 @@ def trainner(model, play_history, train_config: dict):
 
             train_value_mean.update(value=value_loss.item())
             train_policy_mean.update(value=policy_loss.item())
+
+            if step % log_step == 0:
+                msg = f'epochs: [{epoch}/{train_config["epochs"]}]'
+                msg += f' - train value loss: {train_value_mean():.6f} - train policy loss: {train_policy_mean():.6f}'
+                logging.info(msg=msg)
+
 
         scheduler.step()
 
@@ -224,6 +216,11 @@ def trainner(model, play_history, train_config: dict):
             msg += f' - valid value loss: {valid_value_mean():.6f} - valid policy loss: {valid_policy_mean():.6f}'
         logging.info(msg=msg)
     model.eval()
+    
+    if valid_history is not None:
+        del optimizer, scheduler, train_history, valid_history
+    else:
+        del optimizer, scheduler, train_history
 
 
 class Avg:

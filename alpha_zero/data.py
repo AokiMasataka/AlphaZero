@@ -111,9 +111,17 @@ def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False,
                 x = action // size
                 y = action % size
                 return x * size + ((size - 1) - y)
+        
+        h_flip_func = np.frompyfunc(h_flip_action, nin=1, nout=1)
 
-        flip_state_list = [state[:, ::-1, :] for state in play_history.state_list]
-        flip_action_list = list(map(h_flip_action, play_history.action_list))
+        flip_state_array = np.stack(play_history.state_list, axis=0)
+        flip_state_array = np.ascontiguousarray(flip_state_array[:, :, ::-1, :], dtype=flip_state_array.dtype)
+        flip_state_list = list(flip_state_array)
+        
+        flip_action_array = np.array(play_history.action_list, dtype=np.int32)
+        flip_action_array = h_flip_func(flip_action_array)
+        flip_action_list = list(flip_action_array)
+        
         flip_winner_list = [winner for winner in play_history.winner_list]
         del size
 
@@ -130,8 +138,16 @@ def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False,
                 y = action % size
                 return ((size - 1) - x) * size + y
 
-        flip_state_list = [state[:, :, ::-1] for state in play_history.state_list]
-        flip_action_list = list(map(v_flip_action, play_history.action_list))
+        v_flip_func = np.frompyfunc(v_flip_action, nin=1, nout=1)
+        
+        flip_state_array = np.stack(play_history.state_list, axis=0)
+        flip_state_array = np.ascontiguousarray(flip_state_array[:, :, :, ::-1], dtype=flip_state_array.dtype)
+        flip_state_list = list(flip_state_array)
+
+        flip_action_array = np.array(play_history.action_list, dtype=np.int32)
+        flip_action_array = v_flip_func(flip_action_array)
+        flip_action_list = list(flip_action_list)
+
         flip_winner_list = [winner for winner in play_history.winner_list]
         del size
 
@@ -160,8 +176,6 @@ class AlphaDataset(Dataset):
         winner = self.winner_list[index]
 
         state = torch.tensor(state, dtype=torch.float)
-        action = torch.tensor(action, dtype=torch.long)
-        winner = torch.tensor(winner, dtype=torch.float)
         return state, action, winner
 
     @staticmethod
@@ -173,11 +187,31 @@ class AlphaDataset(Dataset):
         return states, actions, winners
 
 
-def build_loader(self_play_histry, batch_size=64, split_rate=0.8):
+def build_loader(self_play_histry, batch_size=64, num_workers=2, split_rate=0.8):
     train_dict, valid_dict, split_point = self_play_histry.get_train_valid_data(split_rate)
-    print(f'INFO: train data size: {split_point}')
     train_data = AlphaDataset(train_dict)
-    valid_data = AlphaDataset(valid_dict)
-    train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=4)
-    valid_loader = DataLoader(valid_data, batch_size=batch_size, num_workers=4)
+    train_loader = DataLoader(
+        dataset=train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=AlphaDataset.collate_fn,
+        pin_memory=True
+    )
+
+    if valid_dict is not None:
+        valid_data = AlphaDataset(valid_dict)
+        valid_loader = DataLoader(
+            dataset=valid_data,
+            batch_size=batch_size * 2,
+            shuffle=False,
+            num_workers=num_workers,
+            collate_fn=AlphaDataset.collate_fn,
+            pin_memory=False
+        )
+        logging.info(msg=f'train_data size: {train_data.__len__()} - valid_data size: {valid_data.__len__()}')
+    else:
+        vaid_loader = None
+        logging.info(msg=f'train_data size: {train_data.__len__()} - valid_data size: 0')
+
     return train_loader, valid_loader
