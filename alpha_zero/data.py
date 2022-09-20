@@ -148,7 +148,7 @@ def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False,
 
         flip_action_array = np.array(play_history.action_list, dtype=np.int32)
         flip_action_array = v_flip_func(flip_action_array)
-        flip_action_list = list(flip_action_list)
+        flip_action_list = list(flip_action_array)
 
         flip_winner_list = [winner for winner in play_history.winner_list]
         del size
