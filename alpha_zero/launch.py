@@ -99,7 +99,7 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
             temperature=self_play_config['temperature']
         )
 
-        logging.info(msg=f'new model winrate: {new_model_winrate:.4f}')
+        logging.info(msg=f'new model winrate: {new_model_winrate:.4f}\n')
 
         save_dir = f'{work_dir}/model_gen{gen}'
         os.makedirs(save_dir, exist_ok=True)

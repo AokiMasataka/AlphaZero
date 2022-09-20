@@ -160,7 +160,7 @@ def trainner(gen, model, play_history, train_config: dict):
         split_rate=train_config['traindata_rate']
     )
 
-    lr = train_config['base_lr'] * (gen ** train_config['lr_gamma'])
+    lr = train_config['base_lr'] * (train_config['lr_gamma'] ** gen)
     optimizer = AdamW(params=model.parameters(), lr=lr)
 
     log_step = train_loader.__len__() // 10
