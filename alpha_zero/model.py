@@ -5,10 +5,9 @@ import numpy
 import torch
 from torch import nn
 from torch.nn import functional
-from torch.utils.data import DataLoader
-from torch.optim import AdamW, lr_scheduler
+from torch.optim import AdamW
 
-from .data import build_loader
+from data import build_loader
 
 
 __all__ = ['ScaleModel', 'build_model', 'trainner']
@@ -151,24 +150,22 @@ def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, moment
     return model
 
 
-def trainner(model, play_history, train_config: dict):
+def trainner(gen, model, play_history, train_config: dict):
     model.train()
 
-    train_loader, valid_loader = build_laoder(
-        self_play_history=play_history,
+    train_loader, valid_loader = build_loader(
+        self_play_histry=play_history,
         batch_size=train_config['batch_size'],
         num_workers=train_config['num_workers'],
         split_rate=train_config['traindata_rate']
     )
 
-    optimizer = AdamW(params=model.parameters(), lr=train_config['base_lr'])
-    scheduler = lr_scheduler.CosineAnnealingLR(
-        optimizer=optimizer, T_max=train_config['epochs'], eta_min=train_config['min_lr']
-    )
+    lr = train_config['base_lr'] * (gen ** train_config['lr_gamma'])
+    optimizer = AdamW(params=model.parameters(), lr=lr)
 
     log_step = train_loader.__len__() // 10
 
-    logging.info(msg='INFO: trainning...')
+    logging.info(msg=f'INFO: trainning... lr={lr:.6f}')
     for epoch in range(1, train_config['epochs'] + 1):
         train_value_mean = Avg()
         train_policy_mean = Avg()
@@ -192,9 +189,6 @@ def trainner(model, play_history, train_config: dict):
                 msg += f' - train value loss: {train_value_mean():.6f} - train policy loss: {train_policy_mean():.6f}'
                 logging.info(msg=msg)
 
-
-        scheduler.step()
-
         if valid_loader is not None:
             valid_value_mean = Avg()
             valid_policy_mean = Avg()
@@ -212,15 +206,12 @@ def trainner(model, play_history, train_config: dict):
 
         msg = f'epochs: [{epoch}/{train_config["epochs"]}]'
         msg += f' - train value loss: {train_value_mean():.6f} - train policy loss: {train_policy_mean():.6f}'
+
         if valid_loader is not None:
             msg += f' - valid value loss: {valid_value_mean():.6f} - valid policy loss: {valid_policy_mean():.6f}'
         logging.info(msg=msg)
     model.eval()
-    
-    if valid_history is not None:
-        del optimizer, scheduler, train_history, valid_history
-    else:
-        del optimizer, scheduler, train_history
+    del optimizer
 
 
 class Avg:

@@ -1,4 +1,6 @@
 import pickle
+import logging
+import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -211,7 +213,7 @@ def build_loader(self_play_histry, batch_size=64, num_workers=2, split_rate=0.8)
         )
         logging.info(msg=f'train_data size: {train_data.__len__()} - valid_data size: {valid_data.__len__()}')
     else:
-        vaid_loader = None
+        valid_loader = None
         logging.info(msg=f'train_data size: {train_data.__len__()} - valid_data size: 0')
 
     return train_loader, valid_loader

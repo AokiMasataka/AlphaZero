@@ -2,7 +2,7 @@ import os
 import logging
 import argparse
 
-from .launch import launch
+from launch import launch
 
 
 def load_config(config_path):

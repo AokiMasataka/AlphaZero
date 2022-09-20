@@ -1,8 +1,8 @@
 import argparse
 
-from .model import ScaleModel
-from .game import GAMES
-from .self_play import mcts_search
+from model import ScaleModel
+from game import GAMES
+from self_play import mcts_search
 
 
 def load_config(config_path):
