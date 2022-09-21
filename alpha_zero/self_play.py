@@ -158,17 +158,6 @@ def self_play(game_module, init_dict, model, num_searchs, random_play=0, c_puct=
     else:
         play_history.winner_list = list(0 for _ in range(play_history.__len__()))
 
-    # if play_history.__len__() % 2 == 0:
-    #     if game.is_win():
-    #         play_history.winner_list = list(1 if i % 2 else -1 for i in range(play_history.__len__()))
-    #     else:
-    #         play_history.winner_list = list(-1 if i % 2 else 1 for i in range(play_history.__len__()))
-    # else:
-    #     if game.is_win():
-    #         play_history.winner_list = list(-1 if i % 2 else 1 for i in range(play_history.__len__()))
-    #     else:
-    #         play_history.winner_list = list(1 if i % 2 else -1 for i in range(play_history.__len__()))
-
     return play_history
 
 
@@ -179,11 +168,11 @@ def parallel_self_play(model, num_searchs, num_games, game, init_dict, random_pl
     model_id = ray.put(model)
 
     work_ids = []
-    for _ in tqdm(range(num_games)):
+    for _ in range(num_games):
         work_id = self_play.remote(game, init_dict, model_id, num_searchs, random_play, c_puct, temperature)
         work_ids.append(work_id)
 
-    for work_id in work_ids:
+    for work_id in tqdm(work_ids):
         histry = ray.get(work_id)
         self_play_histry = self_play_histry + histry
 

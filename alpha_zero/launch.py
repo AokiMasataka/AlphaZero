@@ -76,15 +76,13 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
         else:
             play_history = parallel_self_play(model=model, **self_play_config)
         logging.info('end selfplay')
-        
-        logging.info('start data augment')
+
         play_history = data_augment(
             play_history=play_history,
             hflip=train_config.get('hflip', False),
             vflip=train_config.get('vflip', False),
             max_action=model_config['max_actions'] - 1
         )
-        logging.info('end data augment')
 
         trainner(gen=gen, model=model, play_history=play_history, train_config=train_config)
         new_model_winrate = model_evalate(

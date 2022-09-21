@@ -5,7 +5,7 @@ import numpy
 import torch
 from torch import nn
 from torch.nn import functional
-from torch.optim import AdamW
+from torch.optim import Adam
 
 from data import build_loader
 
@@ -145,13 +145,12 @@ def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, moment
         momentum=momentum,
         act_fn=act_fn
     )
-
-    model = ScaleModel(config=model_config)
-    return model
+    return ScaleModel(config=model_config)
 
 
 def trainner(gen, model, play_history, train_config: dict):
-    model.train()
+    device = train_config.get('device', 'cpu')
+    model.to(device).train()
 
     train_loader, valid_loader = build_loader(
         self_play_histry=play_history,
@@ -161,7 +160,7 @@ def trainner(gen, model, play_history, train_config: dict):
     )
 
     lr = train_config['base_lr'] * (train_config['lr_gamma'] ** gen)
-    optimizer = AdamW(params=model.parameters(), lr=lr)
+    optimizer = Adam(params=model.parameters(), lr=lr)
 
     log_step = train_loader.__len__() // 10
 
@@ -170,6 +169,7 @@ def trainner(gen, model, play_history, train_config: dict):
         train_value_mean = Avg()
         train_policy_mean = Avg()
         for step, (states, actions, winners) in enumerate(train_loader, 1):
+            states, actions, winners = states.to(device), actions.to(device), winners.to(device)
             optimizer.zero_grad()
 
             value, policy = model(states)
@@ -193,6 +193,7 @@ def trainner(gen, model, play_history, train_config: dict):
             valid_value_mean = Avg()
             valid_policy_mean = Avg()
             for states, actions, winners in valid_loader:
+                states, actions, winners = states.to(device), actions.to(device), winners.to(device)
                 with torch.no_grad():
                     value, policy = model(states)
                     value_loss = functional.mse_loss(input=value.view(-1), target=winners)
@@ -210,7 +211,7 @@ def trainner(gen, model, play_history, train_config: dict):
         if valid_loader is not None:
             msg += f' - valid value loss: {valid_value_mean():.6f} - valid policy loss: {valid_policy_mean():.6f}'
         logging.info(msg=msg)
-    model.eval()
+    model.cpu().eval()
     del optimizer
 
 

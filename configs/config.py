@@ -32,5 +32,6 @@ train_config = dict(
     policy_loss_weight=1.0,
     traindata_rate=0.8,
     hflip=True,
-    vflip=True
+    vflip=True,
+    devica='cpu'
 )
