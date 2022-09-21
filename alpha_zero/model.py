@@ -14,11 +14,11 @@ __all__ = ['ScaleModel', 'build_model', 'trainner']
 
 
 class ModelConfig:
-    def __init__(self, in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1, act_fn='relu'):
+    def __init__(self, in_channels=2, dim=256, depth=4, action_space=1, eps=1e-6, momentum=0.1, act_fn='relu'):
         self.in_channels = in_channels
         self.dim = dim
         self.depth = depth
-        self.max_actions = max_actions
+        self.action_space = action_space
         self.eps = eps
         self.momentum = momentum
         self.act_fn = act_fn
@@ -40,7 +40,7 @@ class ModelConfig:
         _str_ = f'in_channels: {self.in_channels}\n'
         _str_ += f'dim: {self.dim}\n'
         _str_ += f'depth: {self.depth}\n'
-        _str_ += f'max_actions: {self.max_actions}\n'
+        _str_ += f'max_actions: {self.action_space}\n'
         _str_ += f'eps: {self.eps}\n'
         _str_ += f'momentum: {self.momentum}\n'
         _str_ += f'activation: {self.act_fn}'
@@ -90,7 +90,7 @@ class ScaleModel(nn.Module):
             nn.Conv2d(config.dim, config.dim, kernel_size=(1, 1), stride=(1, 1)),
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(1),
-            nn.Linear(config.dim, config.max_actions),
+            nn.Linear(config.dim, config.action_space),
             nn.Softmax(dim=1)
         )
 
@@ -135,12 +135,12 @@ class ScaleModel(nn.Module):
         return model
 
 
-def build_model(in_channels=2, dim=256, depth=4, max_actions=1, eps=1e-6, momentum=0.1, act_fn='relu'):
+def build_model(in_channels=2, dim=256, depth=4, action_space=1, eps=1e-6, momentum=0.1, act_fn='relu'):
     model_config = ModelConfig(
         in_channels=in_channels,
         dim=dim,
         depth=depth,
-        max_actions=max_actions,
+        action_space=action_space,
         eps=eps,
         momentum=momentum,
         act_fn=act_fn
@@ -230,7 +230,7 @@ class Avg:
 
 if __name__ == '__main__':
     import numpy as np
-    _config = ModelConfig(dim=64, depth=2, max_actions=8)
+    _config = ModelConfig(dim=64, depth=2, action_space=8)
     _model = ScaleModel(config=_config).eval()
     print(_model)
 

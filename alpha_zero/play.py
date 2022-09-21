@@ -1,7 +1,7 @@
 import argparse
 
 from model import ScaleModel
-from game import GAMES
+from game import GAMES, xy_to_index
 from self_play import mcts_search
 
 
@@ -22,48 +22,47 @@ class PlayState:
         self.game = game_module(**init_dict)
 
     def ai_action(self, num_searchs=128, c_puct=0.5, temperature=0.1):
-        legal_action = self.game.get_legal_action()
-        if not legal_action:
+        legal_actions = self.game.get_legal_action()
+        if not legal_actions:
             self.game.play_chenge()
             action = None
             print('AI: Pass')
-        elif legal_action.__len__() == 1:
-            action = legal_action[0]
+        elif legal_actions.__len__() == 1:
+            action = legal_actions[0]
         else:
             action_index, value = mcts_search(
                 root_state=self.game.state,
                 model=self.model,
                 game_module=self.game_module,
-                init_dict=self.init_dict,
                 num_searchs=num_searchs,
                 c_puct=c_puct,
                 temperature=temperature,
-                return_value=True
             )
-            action = legal_action[action_index]
+            action = legal_actions[action_index]
             print(f'AI value: {value:.4f}')
 
         if action is not None:
             self.game.action(action=action)
 
-    def player_action(self, legal_actions, action=None, x=None, y=None):
+    def player_action(self, x, y):
+        legal_actions = self.game.get_legal_action()
         if not legal_actions:
             self.game.play_chenge()
             print('Player: Pass')
         else:
-            if action is not None:
-                self.game.action(action=action)
-            else:
-                self.game.api(legal_actions)
+            action = xy_to_index(row=x, col=y, n_rows=self.game.n_rows)
+            self.game.action(action=action)
 
 
-def play_cui(model, game_module, init_dict, num_searchs, c_puct):
+def play_cui(model, game_module, init_dict, num_searchs, c_puct, player=1):
     play_state = PlayState(model=model, game_module=game_module, init_dict=init_dict)
 
     while not play_state.game.is_done():
         print(play_state.game)
-        if not play_state.game.player:
-            play_state.game.api()
+        if play_state.game.player == player:
+            x = int(input('x='))
+            y = int(input('y='))
+            play_state.player_action(x=x, y=y)
         else:
             play_state.ai_action(num_searchs=num_searchs, c_puct=c_puct)
 
@@ -82,6 +81,7 @@ def main():
     parser.add_argument('-m', '--model_path', default=None, type=str, help='path to config')
     parser.add_argument('-g', '--gui', action='store_true', help='is use gui')
     parser.add_argument('-s', '--searchs', default=-1, type=int, help='mcts num_searchs')
+    parser.add_argument('-b', '--back_hand', action='store_true', help='')
     args = parser.parse_args()
 
     assert args.model_path is not None, f'--model_path expect arg'
@@ -93,6 +93,11 @@ def main():
     if args.searchs != -1:
         game_config['num_searchs'] = args.searchs
 
+    if not args.back_hand:
+        player = 1
+    else:
+        player = -1
+
     model = ScaleModel.from_pretrained(load_dir=args.model_path).eval()
     game_module = GAMES.get_module(name=game_config['game'])
     init_dict = game_config['init_dict']
@@ -102,7 +107,14 @@ def main():
     if args.gui:
         pass
     else:
-        play_cui(model=model, game_module=game_module, init_dict=init_dict, num_searchs=num_searchs, c_puct=c_puct)
+        play_cui(
+            model=model,
+            game_module=game_module,
+            init_dict=init_dict,
+            num_searchs=num_searchs,
+            c_puct=c_puct,
+            player=player
+        )
 
 
 if __name__ == '__main__':

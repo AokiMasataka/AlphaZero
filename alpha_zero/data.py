@@ -103,6 +103,7 @@ class PlayHistory:
 
 def data_augment(play_history: PlayHistory, hflip=False, vflip=False, rot=False, max_action=-1):
     state_shape = play_history.state_list[0].shape
+
     if hflip:
         size = state_shape[1]
 
