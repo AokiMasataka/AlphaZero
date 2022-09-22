@@ -71,6 +71,10 @@ class Reversi(GameBase):
         else:
             return 0
 
+    def player_chenge(self):
+        self.player = -self.player
+        self.state = -self.state
+
     @staticmethod
     def is_done_functional(state):
         if not Reversi.get_legal_action_functional(state=state):

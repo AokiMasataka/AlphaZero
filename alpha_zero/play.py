@@ -24,7 +24,7 @@ class PlayState:
     def ai_action(self, num_searchs=128, c_puct=0.5, temperature=0.1):
         legal_actions = self.game.get_legal_action()
         if not legal_actions:
-            self.game.play_chenge()
+            self.game.player_chenge()
             action = None
             print('AI: Pass')
         elif legal_actions.__len__() == 1:
@@ -47,11 +47,23 @@ class PlayState:
     def player_action(self, x, y):
         legal_actions = self.game.get_legal_action()
         if not legal_actions:
-            self.game.play_chenge()
+            self.game.player_chenge()
             print('Player: Pass')
         else:
             action = xy_to_index(row=x, col=y, n_rows=self.game.n_rows)
             self.game.action(action=action)
+
+
+def inputs():
+    while True:
+        try:
+            x = int(input('y='))
+            y = int(input('x='))
+            break
+        except:
+            print('invalid inputs try agin')
+
+    return x, y
 
 
 def play_cui(model, game_module, init_dict, num_searchs, c_puct, player=1):
@@ -60,8 +72,7 @@ def play_cui(model, game_module, init_dict, num_searchs, c_puct, player=1):
     while not play_state.game.is_done():
         print(play_state.game)
         if play_state.game.player == player:
-            x = int(input('x='))
-            y = int(input('y='))
+            x, y = inputs()
             play_state.player_action(x=x, y=y)
         else:
             play_state.ai_action(num_searchs=num_searchs, c_puct=c_puct)

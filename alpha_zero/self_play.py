@@ -68,7 +68,7 @@ def _move_to_leaf(node, game_module, model, c_puct, temperature):
 
         if not legal_action:
             value = model.get_value(state=game_module.encode_state(state=node.state))
-            state = deepcopy(node.state[::-1])
+            state = deepcopy(-node.state)
             node.children = [Node(state=deepcopy(state), p=1.0, parent=node)]
             node.is_leaf = False
         else:
