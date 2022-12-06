@@ -15,11 +15,13 @@ def model_evalate(new_model, old_model, evalate_config):
     _, f_winner = parallel_self_play(f_model=new_model, b_model=old_model, **evalate_config)
     _, b_winner = parallel_self_play(f_model=old_model, b_model=new_model, **evalate_config)
     b_winner = list(map(lambda x: -x, b_winner))
-
-    winarte = sum(f_winner + b_winner)
-    f_winrate = 0.5 + (sum(f_winner) / (num_evalate_play // 2))
-    b_winrate = 0.5 + (sum(b_winner) / (num_evalate_play // 2))
-    return 0.5 + (winarte / num_evalate_play), f_winrate, b_winrate
+    
+    # winarte = sum(f_winner + b_winner)
+    winarte = (f_winner + b_winner).count(1)
+    
+    f_winrate = f_winner.count(1) / (num_evalate_play // 2)
+    b_winrate = b_winner.count(1) / (num_evalate_play // 2)
+    return winarte / num_evalate_play, f_winrate, b_winrate
 
 
 def launch(self_play_config: dict, train_config: dict, model_config: dict, work_dir, save_play_history):
@@ -85,8 +87,10 @@ def launch(self_play_config: dict, train_config: dict, model_config: dict, work_
         os.makedirs(save_dir, exist_ok=True)
         model.save_pretrained(save_dir=save_dir)
 
-        if winrate < 0.52:
-            model = deepcopy(old_model)
+        # if winrate < 0.52:
+        #     model = deepcopy(old_model)
+
+        model = deepcopy(old_model)
 
         if save_play_history:
             play_history.save_histry(save_path=save_dir + '/play_history.pkl')

@@ -184,7 +184,7 @@ def trainner(gen, model, play_history, train_config: dict):
             train_value_mean.update(value=value_loss.item())
             train_policy_mean.update(value=policy_loss.item())
 
-            if step % log_step == 0:
+            if not(train_config.get('no_log', False)) and step % log_step == 0:
                 msg = f'epochs: [{epoch}/{train_config["epochs"]}]'
                 msg += f' - train value loss: {train_value_mean():.6f} - train policy loss: {train_policy_mean():.6f}'
                 logging.info(msg=msg)

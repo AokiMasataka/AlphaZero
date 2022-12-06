@@ -1,4 +1,5 @@
 import os
+from tkinter.messagebox import NO
 import ray
 from copy import deepcopy
 from tqdm import tqdm
@@ -149,11 +150,14 @@ def self_play(game_module, init_dict, f_model, b_model, num_searchs, random_play
 
 
 def parallel_self_play(
-        f_model, b_model, num_games, game, init_dict, num_searchs, random_play=0, c_puct=1.0, temperature=1.0
+        f_model, b_model, num_games, game, init_dict, num_searchs, random_play=0, c_puct=1.0, temperature=1.0, num_cpus=None
 ):
     self_play_histry = PlayHistory()
 
-    ray.init(num_cpus=os.cpu_count() - 2)
+    if num_cpus is None:
+        num_cpus = os.cpu_count()
+    
+    ray.init(num_cpus=min(num_cpus, os.cpu_count()))
     f_model_id = ray.put(f_model)
     b_model_id = ray.put(b_model)
 
