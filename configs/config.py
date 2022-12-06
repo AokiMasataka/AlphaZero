@@ -1,4 +1,4 @@
-work_dir = './works/reversi_6x6'
+work_dir = './works/reversi_6x6_1'
 save_play_history = False
 
 self_play_config = dict(
@@ -9,7 +9,8 @@ self_play_config = dict(
     init_dict=dict(size=6),
     random_play=8,
     c_puct=1.0,
-    temperature=1.0
+    temperature=0.25,
+    num_cpus=8
 )
 
 model_config = dict(
@@ -28,10 +29,11 @@ train_config = dict(
     num_workers=2,
     base_lr=5e-3,
     lr_gamma=0.85,
-    value_loss_weight=0.5,
-    policy_loss_weight=1.0,
+    value_loss_weight=1.0,
+    policy_loss_weight=4.0,
     traindata_rate=0.8,
     hflip=True,
     vflip=True,
-    devica='cpu'
+    devica='cpu',
+    no_log=True
 )

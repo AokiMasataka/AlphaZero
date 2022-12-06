@@ -9,7 +9,8 @@ self_play_config = dict(
     init_dict=dict(size=6),
     random_play=8,
     c_puct=1.0,
-    temperature=1.0
+    temperature=0.1,
+    num_cpus=1
 )
 
 model_config = dict(
@@ -25,11 +26,11 @@ model_config = dict(
 train_config = dict(
     epochs=2,
     batch_size=128,
-    num_workers=2,
+    num_workers=1,
     base_lr=5e-3,
     lr_gamma=0.5,
-    value_loss_weight=0.25,
-    policy_loss_weight=1.0,
+    value_loss_weight=1.0,
+    policy_loss_weight=4.0,
     traindata_rate=0.8,
     hflip=True,
     vflip=True,
