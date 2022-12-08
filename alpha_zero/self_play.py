@@ -220,30 +220,31 @@ class PlayHistory:
         self.action_list = histry_dict['action_list']
         self.winner_list = histry_dict['winner_list']
 
-    def get_train_valid_data(self, rate=0.8):
-        train_history, valid_history, split_point = self._train_valid_split(rate=rate)
-        return train_history, valid_history, split_point
-
-    def _train_valid_split(self, rate=0.8):
-        histry_length = self.state_list.__len__()
-        split_point = int(histry_length * rate)
+    def get_train_valid_data(self, train_data_rate=0.8):
+        rand_indexes = np.random.choice(self.__len__(), self.__len__(), replace=False)
+        train_indexes = rand_indexes[0: int(self.__len__() * train_data_rate)]
+        valid_indexes = rand_indexes[int(self.__len__() * train_data_rate): self.__len__()]
+        
+        state_array = np.stack(self.state_list, axis=0)
+        action_array = np.stack(self.action_list, axis=0)
+        winner_array = np.stack(self.winner_list, axis=0)
 
         train_history = PlayHistory(
-            state_list=self.state_list[:split_point],
-            action_list=self.action_list[:split_point],
-            winner_list=self.winner_list[:split_point]
+            state_list=list(state_array[train_indexes]),
+            action_list=list(action_array[train_indexes]),
+            winner_list=list(winner_array[train_indexes])
         )
 
-        if rate == 1:
+        if train_data_rate == 1:
             valid_history = None
         else:
             valid_history = PlayHistory(
-                state_list=self.state_list[split_point:],
-                action_list=self.action_list[split_point:],
-                winner_list=self.winner_list[split_point:]
+                state_list=list(state_array[valid_indexes]),
+                action_list=list(action_array[valid_indexes]),
+                winner_list=list(winner_array[valid_indexes])
             )
 
-        return train_history, valid_history, split_point
+        return train_history, valid_history
 
 
 def data_augment(play_history: PlayHistory, hflip: bool = False, vflip: bool = False, max_action: int = -1):
@@ -273,3 +274,31 @@ def data_augment(play_history: PlayHistory, hflip: bool = False, vflip: bool = F
         del size
 
         play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
+
+    if vflip:
+        size = state_shape[2]
+
+        def v_flip_action(action):
+            if action == max_action:
+                return action
+            else:
+                x = action // size
+                y = action % size
+                return ((size - 1) - x) * size + y
+
+        v_flip_func = np.frompyfunc(v_flip_action, nin=1, nout=1)
+        
+        flip_state_array = np.stack(play_history.state_list, axis=0)
+        flip_state_array = np.ascontiguousarray(flip_state_array[:, :, :, ::-1], dtype=flip_state_array.dtype)
+        flip_state_list = list(flip_state_array)
+
+        flip_action_array = np.array(play_history.action_list, dtype=np.int32)
+        flip_action_array = v_flip_func(flip_action_array)
+        flip_action_list = list(flip_action_array)
+
+        flip_winner_list = [winner for winner in play_history.winner_list]
+        del size
+
+        play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
+
+    return play_history

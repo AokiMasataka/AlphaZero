@@ -93,7 +93,8 @@ class ScaleModel(nn.Module):
         feature = self.extract_feature(state)
         return self.value_head(feature).cpu().item()
 
-    def get_policy(self, x):
+    @torch.inference_mode()
+    def get_policy(self, state):
         state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
         feature = self.extract_feature(state)
         return self.policy_head(feature).cpu().squeeze(0).numpy()
