@@ -1,5 +1,6 @@
+import os
 import argparse
-from utils import load_config
+from utils import load_config, set_logger
 from engine import train
 
 
@@ -15,6 +16,7 @@ def main():
         f.write(text)
     
     if args.train:
+        set_logger(log_file=os.path.join(config['work_dir'], 'train.log'))
         train(config=args.config)
     else:
         pass

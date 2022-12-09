@@ -1,3 +1,5 @@
+import os
+import copy
 import logging
 import torch
 from torch.nn import functional
@@ -36,7 +38,7 @@ class AlphaDataset(Dataset):
         return states, actions, winners
 
 
-def train_model(model, play_history: PlayHistory, train_config: dict):
+def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
     device = train_config.get('devica', 'cpu')
     model.train()
     train_history, valid_hostory = play_history.get_train_valid_data(train_data_rate=train_config['traindata_rate'])
@@ -115,24 +117,61 @@ def train_model(model, play_history: PlayHistory, train_config: dict):
         model.cpu().eval()
         return model
 
+def model_evalate(new_model, old_model, evalate_config):
+    num_evalate_play = evalate_config['num_games'] * 2
 
-def train(config):
+    _, f_winner = parallel_self_play(f_model=new_model, b_model=old_model, **evalate_config)
+    _, b_winner = parallel_self_play(f_model=old_model, b_model=new_model, **evalate_config)
+    b_winner = list(map(lambda x: -x, b_winner))
+    
+    # winarte = sum(f_winner + b_winner)
+    winarte = (f_winner + b_winner).count(1)
+    
+    f_winrate = f_winner.count(1) / (num_evalate_play // 2)
+    b_winrate = b_winner.count(1) / (num_evalate_play // 2)
+    return winarte / num_evalate_play, f_winrate, b_winrate
+
+
+def train(config: dict, save_play_history: bool):
+    model_config = config['model_config']
     self_play_config = config['self_play_config']
-    model = ScaleModel(config=config['model_config'])
+    train_config = config['train_config']
 
-    for gen in range(self_play_config['generation']):
-        if gen == 0:
-            self_play_histry, winner = parallel_self_play(
-                f_model=model,
-                b_model=model,
-                num_games=self_play_config['num_games'],
-                game=GAMES.get_module(self_play_config['game']),
-                init_dict=self_play_config['init_dict'],
-                num_searchs=1,
-                random_play=1000,
-                c_puct=1.0,
-                temperature=1.0,
-                num_cpus=self_play_config['num_cpus']
-            )
+    game_module = GAMES.get_module(name=self_play_config['game'])
+    game = game_module(**self_play_config['init_dict'])
+
+    logging.info(msg=f'game name: {self_play_config["game"]} - init args: {self_play_config["init_dict"]}')
+
+    if model_config.get('action_space', None) is None:
+        model_config['action_space'] = game.action_space
+    
+    random_play_config = copy.deepcopy(self_play_config)
+    random_play_config['random_play'] = 1000
+    random_play_config['num_searchs'] = 1
+
+    evalate_config = copy.deepcopy(self_play_config)
+    evalate_config['num_games'] = 50 // 2
+    
+    model = ScaleModel(config=model_config)
+
+    for gen in range(1, self_play_config['generation']):
+        if gen == 1:
+            play_history, _ = parallel_self_play(f_model=model, b_model=model, **random_play_config)
         else:
-            pass
+            play_history, _ = parallel_self_play(f_model=model, b_model=model, **self_play_config)
+        
+        old_model = copy.deepcopy(model)
+        model = model_train(model=model, play_history=play_history, train_config=train_config, gen=gen)
+        winrate, f_winrate, b_winrate = model_evalate(
+            new_model=model, old_model=old_model, evalate_config=evalate_config
+        )
+        msg = f'new model winrate: {winrate:.4f}'
+        msg += f' - fisrt hand winrate: {f_winrate:.4f}'
+        msg += f' - back hand winrate: {b_winrate: 4f}\n'
+        logging.info(msg=msg)
+
+        save_dir = os.path.join(config['work_dir'], f'model_gen{gen}')
+        model.save_pretrained(save_dir=save_dir, exist_ok=True)
+
+        if save_play_history:
+            play_history.save_histry(save_path=save_dir + '/play_history.pkl')
