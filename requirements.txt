@@ -1,5 +1,4 @@
 numpy
-scipy
 tqdm
 torch>=1.8.0
 ray
