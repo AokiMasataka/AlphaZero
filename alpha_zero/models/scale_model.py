@@ -107,8 +107,9 @@ class ScaleModel(nn.Module):
         policy = self.policy_head(feature)
         return value.cpu().item(), policy.cpu().squeeze(0).numpy()
 
-    def save_pretrained(self, save_dir):
-        os.makedirs(save_dir, exist_ok=True)
+    def save_pretrained(self, save_dir, exist_ok=False):
+        if exist_ok:
+            os.makedirs(save_dir, exist_ok=True)
 
         with open(os.path.join(save_dir, 'model_config.json'), mode='w') as f:
             json.dump(obj=self.config, fp=f, indent=4)
