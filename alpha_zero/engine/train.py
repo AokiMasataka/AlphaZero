@@ -174,4 +174,4 @@ def train(config: dict, save_play_history: bool):
         model.save_pretrained(save_dir=save_dir, exist_ok=True)
 
         if save_play_history:
-            play_history.save_histry(save_path=save_dir + '/play_history.pkl')
+            play_history.save_histry(save_path=os.path.join(save_dir, '/play_history.pkl'))
