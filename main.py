@@ -1,7 +1,7 @@
 import os
 import argparse
-from utils import load_config, set_logger
-from engine import train
+from alpha_zero.utils import load_config, set_logger
+from alpha_zero.engine import train
 
 
 def main():
@@ -12,11 +12,16 @@ def main():
     args = parser.parse_args()
 
     config, text = load_config(args.config)
-    with open(config['work_dir'] + '/config.py', 'w') as f:
-        f.write(text)
     
     if args.train:
+        os.makedirs(config['work_dir'], exist_ok=True)
+        with open(config['work_dir'] + '/config.py', 'w') as f:
+            f.write(text)
         set_logger(log_file=os.path.join(config['work_dir'], 'train.log'))
-        train(config=args.config)
+        train(config=config, save_play_history=True)
     else:
         pass
+
+
+if __name__ == '__main__':
+    main()

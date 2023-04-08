@@ -1,0 +1,1 @@
+python main.py --train --config ./configs/config.py

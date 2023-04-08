@@ -1,6 +1,7 @@
 import os
 import ray
 import pickle
+import logging
 from copy import deepcopy
 from tqdm import tqdm
 import math
@@ -46,7 +47,8 @@ def search(root_state, model, game_module, num_searchs, c_puct=1.0, temperature=
         root_node.w += value
         root_node.n += 1
     
-    policy = [child.n / root_node.n for child in root_node.children]
+    policy = np.array([child.n / root_node.n for child in root_node.children], dtype=float)
+    policy = softmax(policy)
     return policy
 
 
@@ -60,7 +62,7 @@ def _move_to_leaf(node, model, game_module, c_puct, temperature):
                 state = game_module.get_next_state(state=node.state, action=action)
                 node.children.append(Node(state=state, p=policy[action], parent=node))
         else:
-            node.children = [Node(state=deepcopy(-state), p=1.0, parent=node)]
+            node.children = [Node(state=deepcopy(-node.state), p=1.0, parent=node)]
         return value
             
     elif game_module.is_done_functional(state=node.state):
@@ -71,7 +73,7 @@ def _move_to_leaf(node, model, game_module, c_puct, temperature):
         scores = np.array([child.score(pn=node.n, c_puct=c_puct) for child in node.children], dtype=np.float32)
         action = np.random.choice(scores.__len__(), p=softmax(scores, temperature=temperature))
         node = node.children[action]
-        value = -_move_to_leaf(node=node, game_module=game_module, model=model, c_puct=c_puct)
+        value = -_move_to_leaf(node=node, game_module=game_module, model=model, c_puct=c_puct, temperature=temperature)
 
         node.w += value
         node.n += 1
@@ -91,20 +93,24 @@ def self_play(game_module, init_dict, f_model, b_model, num_searchs, random_play
         if step < random_play:
             if legale_actions:
                 action = np.random.choice(a=legale_actions)
+                game.action(action=action)
             else:
                 action = game.pass_action()
         else:
-            policy = search(
-                root_state=game.state,
-                model=models[0],
-                game_module=game_module,
-                num_searchs=num_searchs,
-                c_puct=c_puct,
-                temperature=temperature
-            )
-            action = np.random.choice(a=legale_actions, p=policy)
+            if legale_actions:
+                policy = search(
+                    root_state=game.state,
+                    model=models[0],
+                    game_module=game_module,
+                    num_searchs=num_searchs,
+                    c_puct=c_puct,
+                    temperature=temperature
+                )
+                action = np.random.choice(a=legale_actions, p=policy)
+                game.action(action=action)
+            else:
+                action = game.pass_action()
         
-        game.action(action=action)
         play_history.action_list.append(action)
         models = models[::-1]
 
@@ -243,7 +249,7 @@ class PlayHistory:
                 action_list=list(action_array[valid_indexes]),
                 winner_list=list(winner_array[valid_indexes])
             )
-
+        logging.info(msg=f'train data size: {train_history.__len__()} valid data size: {valid_history.__len__()}')
         return train_history, valid_history
 
 
@@ -251,6 +257,7 @@ def data_augment(play_history: PlayHistory, hflip: bool = False, vflip: bool = F
     state_shape = play_history.state_list[0].shape
 
     if hflip:
+        length = play_history.__len__()
         size = state_shape[1]
 
         def h_flip_action(action):
@@ -274,8 +281,10 @@ def data_augment(play_history: PlayHistory, hflip: bool = False, vflip: bool = F
         del size
 
         play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
+        logging.info(msg=f'data augment hflip: size {length} -> {play_history.__len__()}')
 
     if vflip:
+        length = play_history.__len__()
         size = state_shape[2]
 
         def v_flip_action(action):
@@ -300,5 +309,8 @@ def data_augment(play_history: PlayHistory, hflip: bool = False, vflip: bool = F
         del size
 
         play_history.append(state_list=flip_state_list, action_list=flip_action_list, winner_list=flip_winner_list)
+        logging.info(msg=f'data augment hflip: size {length} -> {play_history.__len__()}')
+    
+    play_history.data_check()
 
     return play_history

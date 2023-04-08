@@ -1,12 +1,14 @@
 import os
+import sys
 import copy
 import logging
+import warnings
 import torch
 from torch.nn import functional
 from torch.cuda import amp
 from torch.utils.data import Dataset, DataLoader
-from models import ScaleModel
-from ..self_play import PlayHistory, parallel_self_play
+from ..models import ScaleModel
+from ..self_play import PlayHistory, parallel_self_play, data_augment
 from ..games import GAMES
 from ..utils import AvgManager
 
@@ -39,8 +41,8 @@ class AlphaDataset(Dataset):
 
 
 def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
-    device = train_config.get('devica', 'cpu')
-    model.train()
+    device = train_config.get('device', 'cpu')
+    model.to(device).train()
     train_history, valid_hostory = play_history.get_train_valid_data(train_data_rate=train_config['traindata_rate'])
     train_dataset = AlphaDataset(play_history=train_history)
     train_loader = DataLoader(
@@ -61,8 +63,8 @@ def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
         )
     
     lr = train_config['base_lr'] * (train_config['lr_gamma'] ** gen)
-    optimizer = torch.optim.adam(model.parameters(), lr=lr)
-    log_step = train_loader.__len__() // 10
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    log_step = max(1, train_loader.__len__() // 4)
 
     scaler = amp.GradScaler(enabled=train_config.get('use_amp', False))
     
@@ -75,9 +77,8 @@ def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
 
             with amp.autocast(enabled=train_config.get('use_amp', False)):
                 value, policy = model(state)
-            
-            value_loss = functional.mse_loss(input=value.view(-1), target=winner)
-            policy_loss = functional.cross_entropy(input=policy, target=action)
+            value_loss = functional.mse_loss(input=value.view(-1).float(), target=winner)
+            policy_loss = functional.cross_entropy(input=policy.float(), target=action)
             loss = train_config['value_loss_weight'] * value_loss + train_config['policy_loss_weight'] * policy_loss
 
             scaler.scale(loss).backward()
@@ -91,7 +92,7 @@ def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
                 msg = f'epochs: [{epoch}/{train_config["epochs"]}]'
                 msg += f' - train value loss: {train_value_mean():.6f} - train policy loss: {train_policy_mean():.6f}'
                 logging.info(msg=msg)
-        
+
         if valid_loader is not None:
             valid_value_mean = AvgManager()
             valid_policy_mean = AvgManager()
@@ -99,8 +100,8 @@ def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
                 states, actions, winners = states.to(device), actions.to(device), winners.to(device)
                 with torch.no_grad():
                     value, policy = model(states)
-                    value_loss = functional.mse_loss(input=value.view(-1), target=winners)
-                    policy_loss = functional.cross_entropy(input=policy, target=actions)
+                value_loss = functional.mse_loss(input=value.view(-1), target=winners)
+                policy_loss = functional.cross_entropy(input=policy, target=actions)
 
                 value_loss = value_loss.item()
                 policy_loss = policy_loss.item()
@@ -114,8 +115,8 @@ def model_train(model, play_history: PlayHistory, train_config: dict, gen: int):
         if valid_loader is not None:
             msg += f' - valid value loss: {valid_value_mean():.6f} - valid policy loss: {valid_policy_mean():.6f}'
         logging.info(msg=msg)
-        model.cpu().eval()
-        return model
+    model.cpu().eval()
+    return model
 
 def model_evalate(new_model, old_model, evalate_config):
     num_evalate_play = evalate_config['num_games'] * 2
@@ -132,15 +133,28 @@ def model_evalate(new_model, old_model, evalate_config):
     return winarte / num_evalate_play, f_winrate, b_winrate
 
 
-def train(config: dict, save_play_history: bool):
+def train(config: dict, save_play_history: bool = False):
     model_config = config['model_config']
     self_play_config = config['self_play_config']
     train_config = config['train_config']
 
+    cuda_available = torch.cuda.is_available()
+    logging.info(f'Python info: {sys.version}')
+    logging.info(f'PyTroch version: {torch.__version__}')
+    logging.info(f'CUDA available: {torch.cuda.is_available()}')
+    if cuda_available:
+        logging.info(f'GPU model: {torch.cuda.get_device_name(0)}')
+    logging.info(msg=f'game name: {self_play_config["game"]} - init args: {self_play_config["init_dict"]}')
+
+    if train_config.get('device', 'cpu') == 'cuda' and not cuda_available:
+        warnings.warn(message='cuda is not available switch to cpu')
+        train_config['device'] = 'cpu'
+        train_config['use_amp'] = False
+
     game_module = GAMES.get_module(name=self_play_config['game'])
     game = game_module(**self_play_config['init_dict'])
-
-    logging.info(msg=f'game name: {self_play_config["game"]} - init args: {self_play_config["init_dict"]}')
+    self_play_config['game'] = game_module
+    generation = self_play_config.pop('generation')
 
     if model_config.get('action_space', None) is None:
         model_config['action_space'] = game.action_space
@@ -153,13 +167,21 @@ def train(config: dict, save_play_history: bool):
     evalate_config['num_games'] = 50 // 2
     
     model = ScaleModel(config=model_config)
+    if model_config.get('pretrained', False):
+        model.load_state_dict(torch.load(model_config['pretrained'], map_location='cpu'), strict=False)
 
-    for gen in range(1, self_play_config['generation']):
+    for gen in range(1, generation):
         if gen == 1:
             play_history, _ = parallel_self_play(f_model=model, b_model=model, **random_play_config)
         else:
             play_history, _ = parallel_self_play(f_model=model, b_model=model, **self_play_config)
         
+        play_history = data_augment(
+            play_history=play_history,
+            hflip=train_config['hflip'],
+            vflip=train_config['vflip'],
+            max_action=game.action_space
+        )
         old_model = copy.deepcopy(model)
         model = model_train(model=model, play_history=play_history, train_config=train_config, gen=gen)
         winrate, f_winrate, b_winrate = model_evalate(

@@ -1,16 +1,16 @@
-work_dir = './works/test'
+work_dir = './works/debug'
 save_play_history = False
 
 self_play_config = dict(
     generation=3,
     num_searchs=16,
-    num_games=16,
+    num_games=64,
     game='Reversi',
     init_dict=dict(size=6),
     random_play=8,
     c_puct=1.0,
     temperature=0.1,
-    num_cpus=1
+    num_cpus=4
 )
 
 model_config = dict(
@@ -29,7 +29,7 @@ model_config = dict(
         se=True,
         act_fn='relu'
     ),
-    depth=2,
+    depth=4,
     action_space=37,
     pretarined_path=None
 )
@@ -45,5 +45,6 @@ train_config = dict(
     traindata_rate=0.8,
     hflip=True,
     vflip=True,
-    devica='cuda'
+    device='cuda',
+    use_amp=True
 )
