@@ -1,10 +1,10 @@
 import numpy as np
 
 
-__all__ = ['GAMES', 'GameBase', 'xy_to_index', 'index_to_xy']
+__all__ = ['GAMES', 'BaseGame', 'xy_to_index', 'index_to_xy']
 
 
-class GameBase:
+class BaseGame:
     def __init__(self, state_shape: tuple, dtype=np.int8):
         self._state = np.zeros(state_shape, dtype=dtype)
         self._player = None
@@ -59,7 +59,7 @@ class Registry:
         self._module_dict[module.__name__] = module
         return module
 
-    def get_module(self, name: str) -> GameBase:
+    def get_module(self, name: str) -> BaseGame:
         return self._module_dict[name]
 
 
