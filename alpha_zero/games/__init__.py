@@ -1,2 +1,3 @@
-from .base import GAMES
-from . import reversi
+from .game_base import GAMES
+from .reversi import Reversi
+from .ox_game import OXGame
