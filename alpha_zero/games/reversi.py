@@ -1,7 +1,7 @@
 import copy
 import functools
 import numpy as np
-from .game_base import GAMES, GameBase, index_to_xy, xy_to_index
+from .game_base import GAMES, GameBase, index_to_xy
 
 
 __all__ = ('Reversi')
@@ -80,7 +80,7 @@ class Reversi(GameBase):
                 return True
         return False
     
-    def get_winner(self):
+    def get_winner(self) -> int:
         copied_obj = copy.deepcopy(self).change_player()
 
         first_hand_legal = self.get_legal_action()

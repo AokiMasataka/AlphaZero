@@ -37,9 +37,6 @@ class GameBase:
     def action(self, action: int):
         raise NotImplementedError('must be implemented')
     
-    def get_next_state(self, action: int):
-        raise NotImplementedError('must be implemented')
-    
     def get_legal_action(self):
         raise NotImplementedError('must be implemented')
     
