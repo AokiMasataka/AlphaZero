@@ -1,9 +1,6 @@
 import logging
 
 
-__all__ = ['load_config', 'set_logger', 'AvgManager']
-
-
 def load_config(config_path):
     config = dict()
     with open(config_path, 'r') as f:
@@ -12,7 +9,7 @@ def load_config(config_path):
     return config, config_text
 
 
-def set_logger(log_file='../sample.log'):
+def set_logger(log_file: str = '', log_level: str = 'info'):
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     stream_handler = logging.StreamHandler()
@@ -22,7 +19,14 @@ def set_logger(log_file='../sample.log'):
     file_handler.setFormatter(formatter)
 
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+
+    if log_level == 'debug':
+        log_level = logging.DEBUG
+    elif log_level == 'info':
+        log_level = logging.INFO
+    else:
+        exit(1)
+    logger.setLevel(log_level)
     logger.addHandler(stream_handler)
     logger.addHandler(file_handler)
 

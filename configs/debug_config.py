@@ -36,7 +36,7 @@ model_config = dict(
 
 train_config = dict(
     epochs=2,
-    batch_size=128,
+    batch_size=64,
     num_workers=1,
     base_lr=5e-3,
     lr_gamma=0.5,
