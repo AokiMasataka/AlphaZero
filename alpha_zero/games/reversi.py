@@ -37,9 +37,9 @@ class Reversi(BaseGame):
         for i in range(self._size):
             _str_ += str(i)
             for j in range(self._size):
-                if self.state[i, j] == 1:
+                if self._state[i, j] == 1:
                     _str_ += 'O'
-                elif self.state[i, j] == -1:
+                elif self._state[i, j] == -1:
                     _str_ += 'X'
                 else:
                     _str_ += '-'
@@ -48,11 +48,11 @@ class Reversi(BaseGame):
         return _str_
     
     def get_hash(self) -> bytes:
-        return self.state.tobytes()
+        return self._state.tobytes()
     
     def encode_state(self) -> np.ndarray:
         player = np.zeros((self._size, self._size), dtype=np.int8)
-        return np.stack([(self.state == self._player), (self.state == -self._player), player], axis=0)
+        return np.stack([(self.state == 1), (self.state == -1), player], axis=0)
     
     def action(self, action: int) -> BaseGame:
         copied_obj = copy.deepcopy(self)
