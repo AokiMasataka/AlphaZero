@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 
 
@@ -25,7 +26,10 @@ class BaseGame:
     def player(self):
         return self._player
     
-    def set_state(self, state):
+    def copy(self):
+        return deepcopy(self)
+    
+    def set_state(self, state: np.ndarray):
         self._state = state
     
     def get_hash(self):
