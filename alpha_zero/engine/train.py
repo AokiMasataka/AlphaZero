@@ -3,10 +3,13 @@ import sys
 import copy
 import logging
 import warnings
+from typing import Dict
+
 import torch
 from torch.utils.data import DataLoader
 from torch.nn import functional
 from torch.cuda import amp
+
 from .self_play import parallel_self_play
 from ..games import GAMES
 from ..model import ScaleModel
@@ -102,7 +105,7 @@ def model_evalate(new_model, old_model, evalate_config):
     return winarte / num_evalate_play, f_winrate, b_winrate
 
 
-def train(config: dict, save_play_history: bool = False):
+def train(config: Dict[dict, dict, dict], save_play_history: bool = False):
     model_config = config['model_config']
     self_play_config = config['self_play_config']
     train_config = config['train_config']
@@ -120,19 +123,21 @@ def train(config: dict, save_play_history: bool = False):
         train_config['device'] = 'cpu'
         train_config['use_amp'] = False
 
-    game_module = GAMES.get_module(name=self_play_config['game'])
+
+    game_module = GAMES.get_module(name=self_play_config.pop('game'))
+    self_play_config['game_module'] = game_module
     game = game_module(**self_play_config['init_dict'])
-    self_play_config['game'] = game_module
+
     generation = self_play_config.pop('generation')
 
     if model_config.get('action_space', None) is None:
         model_config['action_space'] = game.action_space
     
-    random_play_config = copy.deepcopy(self_play_config)
+    random_play_config = self_play_config.copy()
     random_play_config['random_play'] = 1000
     random_play_config['num_searchs'] = 1
 
-    evalate_config = copy.deepcopy(self_play_config)
+    evalate_config = self_play_config.copy()
     evalate_config['num_games'] = 50 // 2
     
     model = ScaleModel(config=model_config)

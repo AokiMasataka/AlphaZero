@@ -4,7 +4,7 @@ import copy
 import math
 from tqdm import tqdm
 import numpy as np
-from ..games.game_base import GameBase
+from ..games.game_base import BaseGame
 from ..model.scale_model import ScaleModel
 from ..utility import PlayHistory
 
@@ -15,35 +15,38 @@ def softmax(x, temperature=1.0):
 
 
 class Node:
-    def __init__(self, obj: GameBase, p: float, parent):
+    def __init__(self, obj: BaseGame, p: float, parent):
         self._obj = obj
         self.p = p
         self.w = 0.0
         self.n = 0
 
         self.is_leaf = True
-        self.children = []
-        self.parent = parent
+        self.children: list[Node] = []
+        self.parent: Node = parent
     
     @property
     def obj(self):
-        return copy.deepcopy(self._obj)
+        return self._obj
 
     @property
     def state(self):
+        return self._obj.state
+    
+    def obj_copy(self):
+        return self._obj.copy()
+    
+    def state_copy(self):
         return self._obj.state.copy()
 
     def __len__(self):
         return self.children.__len__()
     
-    def __call__(self):
-        return copy.deepcopy(self.obj)
-    
     def __repr__(self):
         return f'n: {self.n} - w: {self.w}'
     
-    def score(self, pn: int, c_puct: float):
-        u = c_puct * self.p * math.sqrt(pn) / (1 + self.n)
+    def score(self, c_puct: float):
+        u = c_puct * self.p * math.sqrt(self.parent.n) / (1 + self.n)
         q = (self.w + 1e-6) / (self.n + 1e-6)
         return q + u
 
@@ -51,14 +54,12 @@ class Node:
 class MonteCarlo:
     def __init__(
         self,
-        game_module: GameBase,
         model: ScaleModel,
         num_searchs: int,
         c_puct: float = 1.0,
         temperature: float = 1.0
 
     ):
-        self.game_module = game_module
         self.model = model
         self._num_searchs = num_searchs
         self._c_puct = c_puct
@@ -85,8 +86,8 @@ class MonteCarlo:
     def set_temperature(self, temperature: float):
         self._temperature = temperature
     
-    def __call__(self, root_obj: GameBase):
-        root_node = Node(obj=copy.deepcopy(root_obj), p=1.0, parent=None)
+    def __call__(self, root_obj: BaseGame):
+        root_node = Node(obj=root_obj.copy(), p=1.0, parent=None)
 
         for _ in range(self._num_searchs):
             traced_nodes = []
@@ -96,33 +97,35 @@ class MonteCarlo:
         policy = np.array([child.n / root_node.n for child in root_node.children], dtype=float)
         policy = softmax(policy)
         return policy
-        
+    
     def _move_to_leaf(self, node: Node, traces_nodes: list[Node]):
         traces_nodes.append(node)
         if node.is_leaf:
             node.is_leaf = False
-            legal_actions = self.game_module.get_legal_action_functional(obj=node._obj)
-            value, policy = self.model.inference_state(state=self.game_module.encode_state_functional(obj=node._obj))
-            node.w = value
+            legal_actions = node.obj.get_legal_action()
+            value, policy = self.model.inference_state(state=node.obj.encode_state())
+
             if legal_actions:
-                for action in legal_actions:
-                    game_obj = self.game_module.action_functional(obj=copy.deepcopy(node.obj), action=action)
-                    node.children.append(Node(obj=game_obj, p=policy[action], parent=node))
+                for action, p in zip(legal_actions, softmax(x=policy[action])):
+                    new_game_obj = node.obj.action(action=action)
+                    node.children.append(Node(obj=new_game_obj, p=p, parent=node))
+            elif node.obj.is_done():
+                pass
             else:
-                obj = self.game_module.change_player_functional(obj=node.obj)
-                node.children = [Node(obj=obj, p=1.0, parent=node)]
-            return value, traces_nodes
-        else:
-            scores = np.array([child.score(pn=node.n, c_puct=self.c_puct) for child in node.children], dtype=np.float32)
-            action = np.random.choice(scores.__len__(), p=softmax(x=scores, temperature=self.temperature))
-            value, traces_nodes = self._move_to_leaf(node=node.children[action], traces_nodes=traces_nodes)
-            value = -value
+                new_game_obj = node.obj.change_player()
+                node.children.append(Node(obj=new_game_obj, p=1.0, parent=node))
             
             return value, traces_nodes
+        else:
+            scores = np.array([child.score(c_puct=self.c_puct) for child in node.children], dtype=np.float32)
+            action = np.random.choice(scores.__len__(), p=softmax(x=scores, temperature=self.temperature))
+            value, traces_nodes = self._move_to_leaf(node=node.children[action], traces_nodes=traces_nodes)
+
+            return value, traces_nodes
+
     
     def _back_to_root(self, value: float, traced_nodes: list[Node]):
-        traced_nodes[-1].n += 1
-        for node in traced_nodes[:-1]:
+        for node in traced_nodes:
             node.w += value
             node.n += 1
 
@@ -131,19 +134,17 @@ class MonteCarlo:
 def self_play(
     f_model: ScaleModel,
     b_model: ScaleModel,
-    game_module: GameBase,
-    init_dict: dict,
+    game: BaseGame,
     num_searchs: int,
     random_play: int = 0,
     c_puct: float = 1.0,
     temperature: float = 1.0,
 ) -> PlayHistory:
     play_history = PlayHistory()
-    game = game_module(**init_dict)
 
     monte_carlo = [
-        MonteCarlo(game_module=game_module, model=f_model, num_searchs=num_searchs, c_puct=c_puct, temperature=temperature),
-        MonteCarlo(game_module=game_module, model=b_model, num_searchs=num_searchs, c_puct=c_puct, temperature=temperature)
+        MonteCarlo(model=f_model, num_searchs=num_searchs, c_puct=c_puct, temperature=temperature),
+        MonteCarlo(model=b_model, num_searchs=num_searchs, c_puct=c_puct, temperature=temperature)
     ]
 
     step = 0
@@ -186,7 +187,7 @@ def self_play(
 def parallel_self_play(
         f_model: ScaleModel,
         b_model: ScaleModel,
-        game: GameBase,
+        game_module: BaseGame,
         init_dict: dict,
         num_games: int,
         num_searchs: int,
@@ -207,9 +208,10 @@ def parallel_self_play(
     b_model_id = ray.put(b_model)
 
     work_ids = []
+    game = game_module(*init_dict)
     for _ in range(num_games):
         work_id = self_play.remote(
-            f_model_id, b_model_id, game, init_dict, num_searchs, random_play, c_puct, temperature
+            f_model_id, b_model_id, game, num_searchs, random_play, c_puct, temperature
         )
         work_ids.append(work_id)
 
