@@ -17,6 +17,7 @@ def softmax(x, temperature=1.0):
 class Node:
     def __init__(self, obj: BaseGame, p: float, parent):
         self._obj = obj
+        self._is_done = self._obj.is_done()
         self.p = p
         self.w = 0.0
         self.n = 0
@@ -33,6 +34,10 @@ class Node:
     def state(self):
         return self._obj.state
     
+    @property
+    def is_done(self):
+        return self._is_done
+    
     def obj_copy(self):
         return self._obj.copy()
     
@@ -47,7 +52,7 @@ class Node:
     
     def score(self, c_puct: float):
         u = c_puct * self.p * math.sqrt(self.parent.n) / (1 + self.n)
-        q = (self.w + 1e-6) / (self.n + 1e-6)
+        q = (self.obj.player * self.w + 1e-6) / (self.n + 1e-6)
         return q + u
 
 
@@ -100,27 +105,37 @@ class MonteCarlo:
     
     def _move_to_leaf(self, node: Node, traces_nodes: list[Node]):
         traces_nodes.append(node)
+
+        if node.is_done:
+            value = node.obj.get_winner()
+            return value, traces_nodes
+
         if node.is_leaf:
             node.is_leaf = False
             legal_actions = node.obj.get_legal_action()
+
             value, policy = self.model.inference_state(state=node.obj.encode_state())
 
-            if legal_actions:
-                for action, p in zip(legal_actions, softmax(x=policy[action])):
-                    new_game_obj = node.obj.action(action=action)
-                    node.children.append(Node(obj=new_game_obj, p=p, parent=node))
-            elif node.obj.is_done():
-                pass
-            else:
+            if 0 == legal_actions:
                 new_game_obj = node.obj.change_player()
                 node.children.append(Node(obj=new_game_obj, p=1.0, parent=node))
-            
+            elif 1 == legal_actions:
+                new_game_obj = node.obj.action(action=legal_actions[0])
+                node.children.append(Node(obj=new_game_obj, p=1.0, parent=node))
+            else:    
+                policy = policy[legal_actions]
+                for action, p in zip(legal_actions, softmax(x=policy)):
+                    new_game_obj = node.obj.action(action=action)
+                    node.children.append(Node(obj=new_game_obj, p=p, parent=node))
+                
             return value, traces_nodes
         else:
-            scores = np.array([child.score(c_puct=self.c_puct) for child in node.children], dtype=np.float32)
-            action = np.random.choice(scores.__len__(), p=softmax(x=scores, temperature=self.temperature))
-            value, traces_nodes = self._move_to_leaf(node=node.children[action], traces_nodes=traces_nodes)
-
+            if node.__len__() == 1:
+                value, traces_nodes = self._move_to_leaf(node=node.children[0], traces_nodes=traces_nodes)
+            else:
+                scores = np.array([child.score(c_puct=self.c_puct) for child in node.children], dtype=np.float32)
+                action = np.random.choice(scores.__len__(), p=softmax(x=scores, temperature=self.temperature))
+                value, traces_nodes = self._move_to_leaf(node=node.children[action], traces_nodes=traces_nodes)
             return value, traces_nodes
 
     
@@ -155,18 +170,18 @@ def self_play(
         if step < random_play:
             if legale_actions:
                 action = np.random.choice(a=legale_actions)
-                game.action(action=action)
+                game = game.action(action=action)
             else:
                 action = game.pass_action
-                game.change_player()
+                game = game.change_player()
         else:
             if legale_actions:
                 policy = monte_carlo[0](root_obj=game)
                 action = np.random.choice(a=legale_actions, p=policy)
-                game.action(action=action)
+                game = game.action(action=action)
             else:
                 action = game.pass_action
-                game.change_player()
+                game = game.change_player()
         
         play_history.action_list.append(action)
         monte_carlo = monte_carlo[::-1]
@@ -208,7 +223,7 @@ def parallel_self_play(
     b_model_id = ray.put(b_model)
 
     work_ids = []
-    game = game_module(*init_dict)
+    game = game_module(**init_dict)
     for _ in range(num_games):
         work_id = self_play.remote(
             f_model_id, b_model_id, game, num_searchs, random_play, c_puct, temperature

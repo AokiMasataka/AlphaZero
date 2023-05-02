@@ -105,7 +105,7 @@ def model_evalate(new_model, old_model, evalate_config):
     return winarte / num_evalate_play, f_winrate, b_winrate
 
 
-def train(config: Dict[dict, dict, dict], save_play_history: bool = False):
+def train(config: dict, save_play_history: bool = False):
     model_config = config['model_config']
     self_play_config = config['self_play_config']
     train_config = config['train_config']
