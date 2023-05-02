@@ -15,7 +15,7 @@ self_play_config = dict(
 
 model_config = dict(
     stem_config=dict(
-        in_channels=2,
+        in_channels=3,
         out_dim=64,
         kernel_size=(2, 2),
         stride=(2, 2),

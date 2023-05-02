@@ -15,21 +15,21 @@ self_play_config = dict(
 
 model_config = dict(
     stem_config=dict(
-        in_channels=2,
-        out_dim=64,
+        in_channels=3,
+        out_dim=128,
         kernel_size=(2, 2),
         stride=(2, 2),
         padding=(0, 0)
     ),
 
     block_config=dict(
-        dim=64,
+        dim=128,
         eps=1e-6,
         momentum=0.1,
         se=True,
         act_fn='relu'
     ),
-    depth=4,
+    depth=12,
     action_space=37,
     pretarined_path=None
 )
