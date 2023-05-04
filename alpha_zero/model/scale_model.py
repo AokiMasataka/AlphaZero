@@ -3,6 +3,7 @@ import json
 import numpy
 import torch
 from torch import nn
+from ..games import BaseGame
 
 
 class Block(nn.Module):
@@ -88,21 +89,21 @@ class ScaleModel(nn.Module):
         return value, policy
         
     @torch.inference_mode()
-    def get_value(self, state):
-        state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
-        feature = self.extract_feature(state)
+    def get_value(self, obj: BaseGame):
+        inputs = torch.tensor(obj.encode_state(), dtype=torch.float).unsqueeze(0)
+        feature = self.extract_feature(inputs)
         return self.value_head(feature).cpu().item()
 
     @torch.inference_mode()
-    def get_policy(self, state):
-        state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
-        feature = self.extract_feature(state)
+    def get_policy(self, obj: BaseGame):
+        inputs = torch.tensor(obj.encode_state(), dtype=torch.float).unsqueeze(0)
+        feature = self.extract_feature(inputs)
         return self.policy_head(feature).cpu().squeeze(0).numpy()
 
     @torch.inference_mode()
-    def inference_state(self, state: numpy.ndarray):
-        state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
-        feature = self.extract_feature(state)
+    def inference_state(self, obj: BaseGame):
+        inputs = torch.tensor(obj.encode_state(), dtype=torch.float).unsqueeze(0)
+        feature = self.extract_feature(inputs)
         value = self.value_head(feature)
         policy = self.policy_head(feature)
         return value.cpu().item(), policy.cpu().squeeze(0).numpy()
