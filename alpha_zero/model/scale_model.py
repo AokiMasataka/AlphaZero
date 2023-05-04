@@ -1,9 +1,9 @@
 import os
 import json
-import numpy
 import torch
 from torch import nn
 from ..games import BaseGame
+from ..utility import load_config
 
 
 class Block(nn.Module):
@@ -125,3 +125,12 @@ class ScaleModel(nn.Module):
         model = ScaleModel(config)
         model.load_state_dict(torch.load(load_dir + '/model.pth'))
         return model
+
+    @staticmethod
+    def from_config(config):
+        if isinstance(config, str):
+            config, _ = load_config(config)
+        elif isinstance(config, dict):
+            pass
+        
+        return ScaleModel(config=config['model_config'])
