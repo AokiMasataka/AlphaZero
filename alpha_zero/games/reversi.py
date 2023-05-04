@@ -47,6 +47,10 @@ class Reversi(BaseGame):
         
         return _str_
     
+    @property
+    def hash(self):
+        return self._state.tobytes()
+    
     def encode_state(self) -> np.ndarray:
         return np.stack([(self.state == 1), (self.state == -1)], axis=0)
     
