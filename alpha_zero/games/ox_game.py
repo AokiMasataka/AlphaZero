@@ -36,12 +36,8 @@ class OXGame(BaseGame):
             _str_ += '\n'
         return _str_
     
-    def get_hash(self):
-        return self._state.tobytes()
-    
     def encode_state(self):
-        player = np.zeros((self._size, self._size), dtype=np.int8)
-        return np.stack([(self.state == 1), (self.state == -1), player], axis=0)
+        return np.stack([(self.state == 1), (self.state == -1)], axis=0)
     
     def action(self, action: int) -> BaseGame:
         x, y = index_to_xy(index=action, n_rows=self._size, n_cols=self._size)

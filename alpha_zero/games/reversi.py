@@ -47,12 +47,8 @@ class Reversi(BaseGame):
         
         return _str_
     
-    def get_hash(self) -> bytes:
-        return self._state.tobytes()
-    
     def encode_state(self) -> np.ndarray:
-        player = np.zeros((self._size, self._size), dtype=np.int8)
-        return np.stack([(self.state == 1), (self.state == -1), player], axis=0)
+        return np.stack([(self.state == 1), (self.state == -1)], axis=0)
     
     def action(self, action: int) -> BaseGame:
         copied_obj = copy.deepcopy(self)
@@ -63,6 +59,7 @@ class Reversi(BaseGame):
             player=copied_obj.player
         )
 
+        copied_obj._state = -copied_obj._state
         copied_obj._player = -copied_obj._player
         return copied_obj
     

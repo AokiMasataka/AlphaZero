@@ -26,14 +26,15 @@ class BaseGame:
     def player(self):
         return self._player
     
+    @property
+    def hash(self):
+        return self._state.tobytes() + bytes(self._player + 1)
+    
     def copy(self):
         return deepcopy(self)
     
     def set_state(self, state: np.ndarray):
         self._state = state
-    
-    def get_hash(self):
-        raise NotImplementedError('must be implemented')
     
     def encode_state(self):
         raise NotImplementedError('must be implemented')
