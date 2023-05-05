@@ -43,8 +43,8 @@ train_config = dict(
     value_loss_weight=1.0,
     policy_loss_weight=4.0,
     traindata_rate=0.8,
-    hflip=True,
-    vflip=True,
+    hflip=False,
+    vflip=False,
     device='cuda',
     use_amp=True
 )

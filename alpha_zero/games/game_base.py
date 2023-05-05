@@ -1,10 +1,11 @@
+from copy import deepcopy
 import numpy as np
 
 
-__all__ = ['GAMES', 'GameBase', 'xy_to_index', 'index_to_xy']
+__all__ = ['GAMES', 'BaseGame', 'xy_to_index', 'index_to_xy']
 
 
-class GameBase:
+class BaseGame:
     def __init__(self, state_shape: tuple, dtype=np.int8):
         self._state = np.zeros(state_shape, dtype=dtype)
         self._player = None
@@ -25,19 +26,20 @@ class GameBase:
     def player(self):
         return self._player
     
-    def set_state(self, state):
-        self._state = state
+    @property
+    def hash(self):
+        return self._state.tobytes() + bytes(self._player + 1)
     
-    def get_hash(self):
-        raise NotImplementedError('must be implemented')
+    def copy(self):
+        return deepcopy(self)
+    
+    def set_state(self, state: np.ndarray):
+        self._state = state
     
     def encode_state(self):
         raise NotImplementedError('must be implemented')
     
     def action(self, action: int):
-        raise NotImplementedError('must be implemented')
-    
-    def get_next_state(self, action: int):
         raise NotImplementedError('must be implemented')
     
     def get_legal_action(self):
@@ -62,7 +64,7 @@ class Registry:
         self._module_dict[module.__name__] = module
         return module
 
-    def get_module(self, name: str) -> GameBase:
+    def get_module(self, name: str) -> BaseGame:
         return self._module_dict[name]
 
 

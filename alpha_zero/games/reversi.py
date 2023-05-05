@@ -1,14 +1,14 @@
 import copy
 import functools
 import numpy as np
-from .game_base import GAMES, GameBase, index_to_xy, xy_to_index
+from .game_base import GAMES, BaseGame, index_to_xy
 
 
 __all__ = ('Reversi')
 
 
 @GAMES.register_module
-class Reversi(GameBase):
+class Reversi(BaseGame):
     def __init__(self, size: int = 8, state=None, player: int = None):
         if state is not None:
             self._state = copy.deepcopy(state)
@@ -37,9 +37,9 @@ class Reversi(GameBase):
         for i in range(self._size):
             _str_ += str(i)
             for j in range(self._size):
-                if (self.state[i, j] == 1 and self._player == 1) or (self.state[i, j] == -1 and self._player == -1):
+                if self._state[i, j] == 1:
                     _str_ += 'O'
-                elif (self.state[i, j] == -1 and self._player == 1) or (self.state[i, j] == 1 and self._player == -1):
+                elif self._state[i, j] == -1:
                     _str_ += 'X'
                 else:
                     _str_ += '-'
@@ -47,27 +47,29 @@ class Reversi(GameBase):
         
         return _str_
     
-    def get_hash(self) -> bytes:
-        return self.state.tobytes()
+    @property
+    def hash(self):
+        return self._state.tobytes()
     
     def encode_state(self) -> np.ndarray:
-        return np.stack([(self.state == self._player), (self.state == -self._player)], axis=0)
+        return np.stack([(self.state == 1), (self.state == -1)], axis=0)
     
-    def action(self, action: int) -> GameBase:
+    def action(self, action: int) -> BaseGame:
         copied_obj = copy.deepcopy(self)
-        copied_obj._state = -_action_functional(
+        copied_obj._state = _action_functional(
             state=copied_obj._state.tobytes(),
             action=action,
             shape=copied_obj._state.shape
         )
 
+        copied_obj._state = -copied_obj._state
         copied_obj._player = -copied_obj._player
         return copied_obj
     
     def get_legal_action(self):
         return _get_legal_action_functional(state=self._state.tobytes(), shape=self._state.shape)
     
-    def change_player(self) -> GameBase:
+    def change_player(self) -> BaseGame:
         copied_obj = copy.deepcopy(self)
         copied_obj._state = -copied_obj._state
         copied_obj._player = -copied_obj._player
@@ -80,7 +82,7 @@ class Reversi(GameBase):
                 return True
         return False
     
-    def get_winner(self):
+    def get_winner(self) -> int:
         copied_obj = copy.deepcopy(self).change_player()
 
         first_hand_legal = self.get_legal_action()
@@ -113,7 +115,7 @@ def _action_functional(state: bytes, action: int, shape: tuple) -> np.ndarray:
                 for x, y in direction[:idx]:
                     state[x, y] = 1
 
-    state[index_to_xy(index=action, n_rows=state.shape[0], n_cols=state.shape[0])] = 1
+    state[index_to_xy(index=action, n_rows=shape[0], n_cols=shape[0])] = 1
     return state
 
 
