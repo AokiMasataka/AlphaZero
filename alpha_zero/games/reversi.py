@@ -59,8 +59,7 @@ class Reversi(BaseGame):
         copied_obj._state = _action_functional(
             state=copied_obj._state.tobytes(),
             action=action,
-            shape=copied_obj._state.shape,
-            player=copied_obj.player
+            shape=copied_obj._state.shape
         )
 
         copied_obj._state = -copied_obj._state
@@ -68,7 +67,7 @@ class Reversi(BaseGame):
         return copied_obj
     
     def get_legal_action(self):
-        return _get_legal_action_functional(state=self._state.tobytes(), shape=self._state.shape, player=self.player)
+        return _get_legal_action_functional(state=self._state.tobytes(), shape=self._state.shape)
     
     def change_player(self) -> BaseGame:
         copied_obj = copy.deepcopy(self)
@@ -102,26 +101,26 @@ class Reversi(BaseGame):
 
 
 @functools.lru_cache(maxsize=8192)
-def _action_functional(state: bytes, action: int, shape: tuple, player: int) -> np.ndarray:
+def _action_functional(state: bytes, action: int, shape: tuple) -> np.ndarray:
     state = np.frombuffer(buffer=state, dtype=np.int8, count=-1, offset=0).reshape(shape)
     state = state.copy()
 
     directions = _get_directions(action, size=shape[0])
     for direction in directions:
         stones = [state[i] for i in direction]
-        if player in stones and -player in stones:
-            idx = stones.index(player)
+        if 1 in stones and -1 in stones:
+            idx = stones.index(1)
             stones = stones[:idx]
-            if stones and all(i == -player for i in stones):
+            if stones and all(i == -1 for i in stones):
                 for x, y in direction[:idx]:
-                    state[x, y] = player
+                    state[x, y] = 1
 
-    state[index_to_xy(index=action, n_rows=shape[0], n_cols=shape[0])] = player
+    state[index_to_xy(index=action, n_rows=shape[0], n_cols=shape[0])] = 1
     return state
 
 
 @functools.lru_cache(maxsize=8192)
-def _get_legal_action_functional(state: bytes, shape: tuple, player: int):
+def _get_legal_action_functional(state: bytes, shape: tuple):
     state = np.frombuffer(buffer=state, dtype=np.int8, count=-1, offset=0).reshape(shape)
     legal_actions = []
     for action in range(state.size):
@@ -131,9 +130,9 @@ def _get_legal_action_functional(state: bytes, shape: tuple, player: int):
         directions = _get_directions(action=action, size=shape[0])
         for direction in directions:
             stones = [state[i] for i in direction]
-            if player in stones and -player in stones:
-                stones = stones[:stones.index(player)]
-                if stones and all(i == -player for i in stones):
+            if 1 in stones and -1 in stones:
+                stones = stones[:stones.index(1)]
+                if stones and all(i == -1 for i in stones):
                     legal_actions.append(action)
                     break
     return legal_actions

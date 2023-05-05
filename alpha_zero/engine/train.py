@@ -39,7 +39,9 @@ def model_train(model: ScaleModel, play_history: PlayHistory, train_config: dict
         )
 
     lr = train_config['base_lr'] * (train_config['lr_gamma'] ** gen)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    logging.info(lr)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     log_step = max(1, train_loader.__len__() // 4)
 
     scaler = amp.GradScaler(enabled=train_config.get('use_amp', False))
@@ -123,7 +125,6 @@ def train(config: dict, save_play_history: bool = False):
         train_config['device'] = 'cpu'
         train_config['use_amp'] = False
 
-
     game_module = GAMES.get_module(name=self_play_config.pop('game'))
     self_play_config['game_module'] = game_module
     game = game_module(**self_play_config['init_dict'])
@@ -146,7 +147,7 @@ def train(config: dict, save_play_history: bool = False):
 
     for gen in range(1, generation):
         if gen == 1:
-            play_history, _ = parallel_self_play(f_model=model, b_model=model, **random_play_config)
+           play_history, _ = parallel_self_play(f_model=model, b_model=model, **random_play_config)
         else:
             play_history, _ = parallel_self_play(f_model=model, b_model=model, **self_play_config)
         
@@ -167,8 +168,10 @@ def train(config: dict, save_play_history: bool = False):
         msg += f' - back hand winrate: {b_winrate: 4f}\n'
         logging.info(msg=msg)
 
-        save_dir = os.path.join(config['work_dir'], f'model_gen{gen}')
+        save_dir = os.path.join(config['work_dir'], f'model_gen{gen}').replace('\\', '/')
         model.save_pretrained(save_dir=save_dir, exist_ok=True)
 
         if save_play_history:
-            play_history.save_history(save_path=os.path.join(save_dir, '/play_history.pkl'))
+            play_history_path = os.path.join(save_dir, 'play_history.pkl').replace('\\', '/')
+            logging.info(msg=f'play history save to {play_history_path}')
+            play_history.save_history(save_path=play_history_path)
