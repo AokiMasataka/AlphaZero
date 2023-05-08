@@ -1,2 +1,1 @@
-from .game import Game
-from .reversi import Reversi
+from .game import Game, GAMES
